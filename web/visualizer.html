@@ -22,8 +22,6 @@
     #ui::-webkit-scrollbar-track { background: transparent; }
     #ui::-webkit-scrollbar-thumb { background: #00f2ff44; border-radius: 4px; }
     .stat { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
-    .progress { margin-top: 12px; height: 6px; background: #1a1a3a; border-radius: 999px; overflow: hidden; }
-    .progress > div { height: 100%; width: 0; background: linear-gradient(90deg,#00f2ff,#0066ff); transition: width .2s ease; }
     .row { display: flex; gap: 8px; margin-top: 8px; }
     input, button, select {
       width: 100%; background: transparent; border: 1px solid #00f2ff; color: #00f2ff;
@@ -234,8 +232,6 @@
     <div class="stat"><span>Neurons</span><span id="neurons">6</span></div>
     <div class="stat"><span>Synapses</span><span id="synapses">5</span></div>
     <div class="stat"><span>Knowledge</span><span id="knowledge">0.0 MB</span></div>
-    <div class="progress"><div id="progress"></div></div>
-
     <div class="row"><button id="general">Learn General</button><button id="pause">Pause/Resume</button></div>
     <div class="row"><input id="topic" placeholder="topic e.g. quantum computing" /></div>
     <div class="row"><button id="specialize">Specialize Topic</button><button id="ask">Ask</button></div>
@@ -694,7 +690,6 @@
       document.getElementById("neurons").textContent = neurons.length;
       document.getElementById("synapses").textContent = synapses.length;
       document.getElementById("knowledge").textContent = (neurons.length * 0.5).toFixed(1) + " MB";
-      document.getElementById("progress").style.width = `${learningProgress}%`;
     }
 
     function log(message, type = "") {
@@ -824,7 +819,6 @@
       for (const q of GENERAL_QUERIES) {
         if (!isLearning) break;
         try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
-        await new Promise(r => setTimeout(r, 600));
       }
       log("General queries complete — AI training continues");
     };
@@ -845,7 +839,6 @@
       for (const q of queries) {
         if (!isLearning) break;
         try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
-        await new Promise(r => setTimeout(r, 600));
       }
       log(`Specialization in "${topic}" complete`);
       isLearning = false;
@@ -1334,19 +1327,21 @@
       try {
         // ── 1. AI generates a question ─────────────────────
         tsStatus("🤔 Generating question…");
-        const question = await aiCall([
+        let question = await aiCall([
           { role: "system", content: "You are a curriculum designer for SPORE, an AI that learns from web sources. Generate ONE clear, open-ended question on any topic SPORE can research. Return only the question, nothing else." },
           { role: "user",   content: "Generate the next training question." },
         ], 60);
+        if (!question) throw new Error("AI returned empty question — check model config");
         document.getElementById("ts-question").textContent = question;
         tsShowBlock("ts-q-block");
 
         // ── 2. AI generates a search query ─────────────────
         tsStatus("🔎 Generating search query…");
-        const searchQ = await aiCall([
+        let searchQ = await aiCall([
           { role: "system", content: "Convert the following question into a concise web search query (3-6 words). Return only the query string." },
           { role: "user",   content: question },
         ], 20);
+        if (!searchQ) searchQ = question.split(/\s+/).slice(0, 5).join(" ");
 
         // ── 3. DDG search → context neurons (amber) ────────
         tsStatus(`🌐 Searching: "${searchQ}"…`);
@@ -1371,14 +1366,14 @@
 
         // ── 4. SPORE synthesizes — ISOLATION ENFORCED ──────
         tsStatus("🧠 SPORE synthesizing…");
-        await new Promise(r => setTimeout(r, 700));
         const sporeReply = sporeRespond(question, ctxPool);
         document.getElementById("ts-response").textContent = sporeReply;
         tsShowBlock("ts-resp-block");
 
         // ── 5. AI assesses — may NOT answer for SPORE ──────
         tsStatus("⚖ Assessing SPORE's response…");
-        const ctxSummary = top.map(r => r.snippet.slice(0, 100)).join(" | ");
+        const ctxSummary   = top.map(r => r.snippet.slice(0, 100)).join(" | ") || "(no context)";
+        const assessContent = `Question: ${question}\nContext available to SPORE: ${ctxSummary}\nSPORE's response: ${sporeReply || "(no response)"}`;
         const rawResult  = await aiCall([
           {
             role: "system",
@@ -1395,10 +1390,7 @@ A response is POOR only if it is completely off-topic or says it has no knowledg
 Reply ONLY with this JSON (no other text):
 {"good": true, "score": 0.75, "feedback": "one brief sentence"}`,
           },
-          {
-            role: "user",
-            content: `Question: ${question}\nContext available to SPORE: ${ctxSummary}\nSPORE's response: ${sporeReply}`,
-          },
+          { role: "user", content: assessContent },
         ], 80);
 
         let result = { good: false, score: 0, feedback: "Could not parse assessment" };
