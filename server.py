@@ -123,6 +123,10 @@ class NLFStageRequest(BaseModel):
     spec: dict
 
 
+class NLFSimpleImportRequest(BaseModel):
+    spec: dict
+
+
 class NLFCycleRequest(BaseModel):
     category_id: str
     gold_map: Optional[dict] = None
@@ -262,6 +266,87 @@ async def nlf_run_cycle(req: NLFCycleRequest):
     }
 
 
+@app.post("/api/nlf/stages/import")
+async def nlf_import_stage(req: NLFSimpleImportRequest):
+    """
+    Load a stage from the simplified human-readable spec format.
+
+    Accepts stage_number, stage_name, description, and categories with
+    questions (each having a ``question`` string and a ``responses`` list of
+    up to 10 seed slot templates) plus optional cycles_min / cycles_max.
+    """
+    fw = _get_nlf()
+    try:
+        stage = fw.load_stage_from_simple_spec(req.spec)
+    except (KeyError, ValueError) as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail=str(exc))
+    fw.save(_NLF_STATE_PATH)
+    return {
+        "status": "imported",
+        "stage": stage.number,
+        "name": stage.name,
+        "categories": len(stage.categories),
+        "questions": sum(len(c.questions) for c in stage.categories),
+    }
+
+
+@app.get("/api/nlf/stages/{stage_number}/detail")
+async def nlf_stage_detail(stage_number: int):
+    """
+    Return full detail for a stage: categories, questions, and all 10 slots.
+
+    Used by the training UI to render the question / response-slot browser.
+    """
+    from fastapi import HTTPException
+    fw = _get_nlf()
+    stage = fw.get_stage(stage_number)
+    if stage is None:
+        raise HTTPException(status_code=404, detail=f"Stage {stage_number} not loaded.")
+
+    categories = []
+    for cat in stage.categories:
+        questions = []
+        for q in cat.questions:
+            slots = [
+                {
+                    "slot_number": s.slot_number,
+                    "text":        s.text,
+                    "function":    s.function.value,
+                    "register":    s.register.value,
+                    "use_case":    s.use_case,
+                }
+                for s in sorted(q.slots, key=lambda s: s.slot_number)
+            ]
+            questions.append({
+                "id":             q.id,
+                "canonical_form": q.canonical_form,
+                "slots":          slots,
+                "variant_count":  len(q.variants),
+            })
+        categories.append({
+            "id":              cat.id,
+            "name":            cat.name,
+            "description":     cat.description,
+            "cycles_min":      getattr(cat, "cycles_min", None),
+            "cycles_max":      getattr(cat, "cycles_max", None),
+            "accuracy":        round(cat.accuracy, 3),
+            "generalization":  round(cat.generalization, 3),
+            "retention":       round(cat.retention, 3),
+            "cycles_completed": cat.cycles_completed,
+            "mastered":        cat.is_mastered,
+            "questions":       questions,
+        })
+    return {
+        "stage":      stage.number,
+        "name":       stage.name,
+        "description": stage.description,
+        "unlocked":   stage.unlocked,
+        "complete":   stage.is_complete,
+        "categories": categories,
+    }
+
+
 @app.get("/api/nlf/mastery")
 async def nlf_mastery():
     """Return full mastery report across all loaded stages."""
@@ -278,6 +363,12 @@ if _WEB_DIR.exists():
 async def root():
     """Serve the visualizer as the homepage."""
     return FileResponse(_WEB_DIR / "visualizer.html")
+
+
+@app.get("/training.html")
+async def training_page():
+    """Serve the training section page."""
+    return FileResponse(_WEB_DIR / "training.html")
 
 
 # ---------------------------------------------------------------------------
