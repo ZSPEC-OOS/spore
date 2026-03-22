@@ -94,11 +94,7 @@
         <button id="test-search" class="btn-warn">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">
-        AI test calls your provider directly — no server needed.<br>
-        Search test requires <code>python server.py</code>
-        at <input id="server-url" placeholder="http://localhost:8000" style="width:160px;display:inline-block;padding:3px 6px;font-size:10px;margin-top:4px" />.
-      </p>
+      <p class="hint">AI test calls your provider directly. Search test requires <code>python server.py</code>.</p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -185,11 +181,9 @@
     let isLearning = false;
     let learningProgress = 0;
 
-    // ── Backend server base URL (user-configurable, stored in localStorage) ─
+    // ── Backend server base URL (search test only) ───────
     const DEFAULT_API = "http://localhost:8000";
-    function getAPI() {
-      return localStorage.getItem("sporeServerUrl") || DEFAULT_API;
-    }
+    const getAPI = () => DEFAULT_API;
 
     // ── AI provider presets (Find ⟳ cycles through these) ─
     const AI_PRESETS = [
@@ -463,18 +457,6 @@
       try { applyAiConfigToForm(JSON.parse(raw)); } catch (_) {}
     }
 
-    function loadServerUrlFromStorage() {
-      const url = localStorage.getItem("sporeServerUrl");
-      document.getElementById("server-url").value = url || DEFAULT_API;
-    }
-
-    // Save server URL to localStorage whenever it changes.
-    document.getElementById("server-url").addEventListener("change", () => {
-      const val = document.getElementById("server-url").value.trim();
-      localStorage.setItem("sporeServerUrl", val || DEFAULT_API);
-      log(`Backend URL set to ${val || DEFAULT_API}`);
-    });
-
     // ── Find button — auto-probe all base URLs for a model ─
     let isScanning = false;
 
@@ -534,7 +516,6 @@
                 { role: "user",   content: "Reply with exactly: OK" },
               ],
               max_tokens: 5,
-              temperature: 0,
             }),
           });
           const data = await res.json();
@@ -705,7 +686,6 @@
 
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
-    loadServerUrlFromStorage();
     boot();
   </script>
 </body>
