@@ -59,6 +59,31 @@
     #diag-status, #fb-status { font-size: 11px; color: #8deaff; margin-top: 6px; min-height: 14px; }
     #fb-status { margin-top: 4px; }
     @keyframes blink { 50% { opacity: 0; } }
+    /* ── Training Sandbox ─────────────────────────────── */
+    #training-sandbox {
+      position: fixed; top: 20px; right: 20px; z-index: 10;
+      width: 300px; max-height: calc(100vh - 40px);
+      background: rgba(10,10,26,0.92);
+      border: 1px solid #ff8c00; border-radius: 10px; padding: 16px;
+      box-shadow: 0 0 24px rgba(255,140,0,0.18);
+      overflow-y: auto; font-family: "Courier New", monospace; font-size: 12px; color: #00f2ff;
+    }
+    #training-sandbox::-webkit-scrollbar { width: 4px; }
+    #training-sandbox::-webkit-scrollbar-thumb { background: #ff8c0044; border-radius: 4px; }
+    #ts-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    #ts-header h3 { font-size:13px; color:#ff8c00; }
+    .ts-btns { display:flex; gap:6px; }
+    .ts-btns button { width:auto; padding:4px 10px; font-size:11px; }
+    .ts-metric { display:flex; justify-content:space-between; font-size:11px; margin-top:4px; color:#8deaff; }
+    .ts-metric span:last-child { color:#fff; }
+    #ts-status { margin-top:8px; font-size:11px; color:#ff8c00; min-height:14px; }
+    .ts-block { margin-top:10px; border-top:1px solid rgba(255,140,0,0.2); padding-top:8px; display:none; }
+    .ts-label { font-size:10px; color:#ff8c00; letter-spacing:.05em; margin-bottom:5px; }
+    .ts-text { color:#e0f7ff; line-height:1.6; font-size:11px; }
+    .ts-source { color:#8deaff; margin-top:3px; font-size:11px; }
+    .ts-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; }
+    .ts-badge.good { background:rgba(0,255,136,0.12); color:#00ff88; border:1px solid #00ff88; }
+    .ts-badge.poor { background:rgba(255,77,77,0.12); color:#ff4d4d; border:1px solid #ff4d4d; }
     #canvas { cursor: grab; }
     #canvas.dragging { cursor: grabbing; }
     #reset-view {
@@ -143,6 +168,39 @@
       <div id="log"></div>
     </div><!-- /#ai-collapsible -->
   </aside>
+
+  <!-- ── Training Sandbox (upper right) ──────────────── -->
+  <div id="training-sandbox">
+    <div id="ts-header">
+      <h3>🎓 Training Sandbox</h3>
+      <div class="ts-btns">
+        <button id="ts-start">▶ Start</button>
+        <button id="ts-stop" disabled>⏹ Stop</button>
+      </div>
+    </div>
+    <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
+    <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
+    <div class="ts-metric"><span>Avg Score</span><span id="ts-avg-score">—</span></div>
+    <div class="ts-metric"><span>Readiness</span><span id="ts-readiness">—</span></div>
+    <div id="ts-status">Idle — attach AI model to begin</div>
+
+    <div class="ts-block" id="ts-q-block">
+      <div class="ts-label">❓ QUESTION</div>
+      <div class="ts-text" id="ts-question"></div>
+    </div>
+    <div class="ts-block" id="ts-ctx-block">
+      <div class="ts-label">🔍 CONTEXT NEURONS (working memory)</div>
+      <div id="ts-context"></div>
+    </div>
+    <div class="ts-block" id="ts-resp-block">
+      <div class="ts-label">🧠 SPORE RESPONSE</div>
+      <div class="ts-text" id="ts-response"></div>
+    </div>
+    <div class="ts-block" id="ts-assess-block">
+      <div class="ts-label">⚖ ASSESSMENT</div>
+      <div id="ts-assessment"></div>
+    </div>
+  </div>
 
   <button id="reset-view">⌖ Reset View</button>
 
@@ -293,6 +351,7 @@
         this.snippet    = data.snippet || null;
         this.source     = data.source  || "core";
         this.createdAt  = new Date().toLocaleTimeString();
+        this.type       = "permanent"; // "permanent" | "context"
       }
       update() {
         this.phase += 0.02;
@@ -302,16 +361,20 @@
         this.y += Math.cos(this.phase * 0.8) * 0.15;
       }
       draw() {
+        const isCtx = this.type === "context";
+        const rgb   = isCtx ? "255,140,0" : "0,242,255";
+        const rgb2  = isCtx ? "255,80,0"  : "0,102,255";
+        const solid = isCtx ? "#ff8c00"   : "#00f2ff";
         const pulse = Math.sin(this.phase) * 0.25 + 1;
-        const glow = this.radius * 2.2 * pulse;
-        const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
-        grad.addColorStop(0, "rgba(0,242,255,0.8)");
-        grad.addColorStop(1, "rgba(0,102,255,0)");
+        const glow  = this.radius * 2.2 * pulse;
+        const grad  = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
+        grad.addColorStop(0, `rgba(${rgb},0.8)`);
+        grad.addColorStop(1, `rgba(${rgb2},0)`);
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(this.x, this.y, glow, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#00f2ff";
+        ctx.fillStyle = solid;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -896,6 +959,240 @@
         api_key:  res.data.aiApiKey,
       }));
       log("Keys pulled from Firebase", "ok");
+    };
+
+    // ══════════════════════════════════════════════════════
+    // TRAINING SANDBOX — Phase 3
+    // ══════════════════════════════════════════════════════
+
+    let isTraining      = false;
+    let tsCycles        = 0;
+    let tsCommits       = 0;
+    const tsScores      = [];      // rolling window (last 20)
+    let ctxPool         = [];      // context neurons for current cycle
+
+    // ── Generic AI call helper ────────────────────────────
+    async function aiCall(messages, maxTokens = 200) {
+      const cfg = getAiConfigFromForm();
+      let base  = (cfg.base_url || "https://api.openai.com/v1").trim().replace(/\/$/, "");
+      if (!/^https?:\/\//i.test(base)) base = "https://" + base;
+      const res  = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cfg.api_key}` },
+        body: JSON.stringify({ model: cfg.model_id, messages, max_tokens: maxTokens }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      return (data.choices?.[0]?.message?.content || "").trim();
+    }
+
+    // ── SPORE response engine ─────────────────────────────
+    // ISOLATION ENFORCED: no AI calls, only knowledge bank + context neurons.
+    function sporeRespond(question, contextNeurons) {
+      const STOP = new Set(["the","a","an","is","are","was","were","be","been","have","has","had","do","does","did","will","would","could","should","can","what","how","why","when","where","who","that","this","with","from","for","and","or","but","not","its","it","in","on","at","by","to","of"]);
+      const qWords = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 3 && !STOP.has(w));
+      if (!qWords.length) return "Insufficient query tokens to retrieve knowledge.";
+
+      const scoreNode = n => {
+        const text = (n.concept + " " + (n.snippet || "")).toLowerCase();
+        return qWords.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
+      };
+
+      const bankHits = neurons
+        .filter(n => n.snippet && n.type === "permanent")
+        .map(n => ({ n, s: scoreNode(n) }))
+        .filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s)
+        .slice(0, 3)
+        .map(x => x.n);
+
+      const CONN = ["Additionally, ", "Furthermore, ", "It is also noted that ", "Related to this, "];
+      const snippets = [
+        ...contextNeurons.filter(n => n.snippet).map(n => n.snippet.slice(0, 220)),
+        ...bankHits.filter(n => n.snippet).map(n => n.snippet.slice(0, 160)),
+      ].slice(0, 4);
+
+      if (!snippets.length) return "My knowledge bank contains no relevant entries for this topic. Further learning is required.";
+      return snippets.map((s, i) => (i === 0 ? s : CONN[i % CONN.length] + s)).join(" ");
+    }
+
+    // ── Training UI helpers ───────────────────────────────
+    function tsStatus(msg) { document.getElementById("ts-status").textContent = msg; }
+
+    function tsShowBlock(id, innerHtml) {
+      const el = document.getElementById(id);
+      el.style.display = "block";
+      if (innerHtml !== undefined) {
+        const target = el.querySelector(".ts-text") || el.querySelector("div:last-child");
+        if (target) target.innerHTML = innerHtml;
+      }
+    }
+
+    function clearCtxPool() {
+      ctxPool.forEach(n => {
+        const ni = neurons.indexOf(n);
+        if (ni > -1) neurons.splice(ni, 1);
+        for (let i = synapses.length - 1; i >= 0; i--) {
+          if (synapses[i].a === n || synapses[i].b === n) synapses.splice(i, 1);
+        }
+      });
+      ctxPool = [];
+      syncUI();
+    }
+
+    function commitCtxPool() {
+      ctxPool.forEach(n => { n.type = "permanent"; n.activate(); });
+      ctxPool = [];
+    }
+
+    // ── Main training cycle ───────────────────────────────
+    async function runTrainingCycle() {
+      const cfg = getAiConfigFromForm();
+      if (!cfg.api_key || !cfg.model_id) {
+        tsStatus("⚠ Configure AI model first");
+        isTraining = false;
+        document.getElementById("ts-start").disabled = false;
+        document.getElementById("ts-stop").disabled  = true;
+        return;
+      }
+
+      clearCtxPool();
+      ["ts-q-block","ts-ctx-block","ts-resp-block","ts-assess-block"]
+        .forEach(id => { document.getElementById(id).style.display = "none"; });
+
+      try {
+        // ── 1. AI generates a question ─────────────────────
+        tsStatus("🤔 Generating question…");
+        const question = await aiCall([
+          { role: "system", content: "You are a curriculum designer for SPORE, an AI that learns from web sources. Generate ONE clear, open-ended question on any topic SPORE can research. Return only the question, nothing else." },
+          { role: "user",   content: "Generate the next training question." },
+        ], 60);
+        document.getElementById("ts-question").textContent = question;
+        tsShowBlock("ts-q-block");
+
+        // ── 2. AI generates a search query ─────────────────
+        tsStatus("🔎 Generating search query…");
+        const searchQ = await aiCall([
+          { role: "system", content: "Convert the following question into a concise web search query (3-6 words). Return only the query string." },
+          { role: "user",   content: question },
+        ], 20);
+
+        // ── 3. DDG search → context neurons (amber) ────────
+        tsStatus(`🌐 Searching: "${searchQ}"…`);
+        const results = await ddgSearch(searchQ);
+        const top     = results.slice(0, 3);
+        if (!top.length) throw new Error("DuckDuckGo returned no results");
+
+        const ctxHtml = top.map(r => `<div class="ts-source">• ${r.title.slice(0, 52)}</div>`).join("");
+        document.getElementById("ts-context").innerHTML = ctxHtml;
+        tsShowBlock("ts-ctx-block");
+
+        top.forEach(r => {
+          const words   = r.title.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/).filter(Boolean);
+          const concept = "[CTX] " + (words.slice(0, 2).join(" ") || searchQ);
+          const parent  = neurons[Math.floor(Math.random() * Math.min(neurons.length, 6))];
+          const n       = grow(concept, parent, { url: r.url, snippet: r.snippet, source: searchQ });
+          n.type = "context";
+          ctxPool.push(n);
+          n.activate();
+        });
+        syncUI();
+
+        // ── 4. SPORE synthesizes — ISOLATION ENFORCED ──────
+        tsStatus("🧠 SPORE synthesizing…");
+        await new Promise(r => setTimeout(r, 700));
+        const sporeReply = sporeRespond(question, ctxPool);
+        document.getElementById("ts-response").textContent = sporeReply;
+        tsShowBlock("ts-resp-block");
+
+        // ── 5. AI assesses — may NOT answer for SPORE ──────
+        tsStatus("⚖ Assessing SPORE's response…");
+        const ctxSummary = top.map(r => r.snippet.slice(0, 100)).join(" | ");
+        const rawResult  = await aiCall([
+          {
+            role: "system",
+            content: `You are evaluating SPORE's response. SPORE is a retrieval-only system — it assembles answers from knowledge fragments, it cannot generate new language.
+
+STRICT RULES:
+1. Do NOT answer the question yourself.
+2. Do NOT suggest what the correct answer should be.
+3. Only judge: is SPORE's response on-topic and coherent?
+
+A response is GOOD if it references relevant domain knowledge, even imperfectly.
+A response is POOR only if it is completely off-topic or says it has no knowledge.
+
+Reply ONLY with this JSON (no other text):
+{"good": true, "score": 0.75, "feedback": "one brief sentence"}`,
+          },
+          {
+            role: "user",
+            content: `Question: ${question}\nContext available to SPORE: ${ctxSummary}\nSPORE's response: ${sporeReply}`,
+          },
+        ], 80);
+
+        let result = { good: false, score: 0, feedback: "Could not parse assessment" };
+        try { const m = rawResult.match(/\{[\s\S]*?\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
+
+        tsCycles++;
+        tsScores.push(result.score);
+        if (tsScores.length > 20) tsScores.shift();
+        const avg      = tsScores.reduce((a, b) => a + b, 0) / tsScores.length;
+        const readiness = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
+
+        document.getElementById("ts-cycles").textContent    = tsCycles;
+        document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
+        document.getElementById("ts-readiness").textContent = readiness;
+
+        // ── 6. Commit or discard ───────────────────────────
+        const badge = result.good
+          ? `<span class="ts-badge good">✅ Good — ${result.score.toFixed(2)}</span>`
+          : `<span class="ts-badge poor">❌ Poor — ${result.score.toFixed(2)}</span>`;
+        document.getElementById("ts-assessment").innerHTML =
+          `${badge}<div style="margin-top:6px;color:#8deaff;font-size:11px">${result.feedback}</div>`;
+        tsShowBlock("ts-assess-block");
+
+        if (result.good) {
+          commitCtxPool();
+          tsCommits++;
+          document.getElementById("ts-commits").textContent = tsCommits;
+          tsStatus(`✅ Cycle ${tsCycles} — committed to knowledge bank`);
+          log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)})`, "ok");
+        } else {
+          clearCtxPool();
+          tsStatus(`❌ Cycle ${tsCycles} — knowledge discarded`);
+          log(`Training cycle ${tsCycles}: rejected — ${result.feedback}`, "err");
+        }
+        syncUI();
+
+      } catch (err) {
+        tsStatus(`❌ Error: ${err.message}`);
+        log(`Training error: ${err.message}`, "err");
+        clearCtxPool();
+      }
+
+      // Schedule next cycle
+      if (isTraining) {
+        await new Promise(r => setTimeout(r, 2500));
+        if (isTraining) runTrainingCycle();
+      }
+    }
+
+    document.getElementById("ts-start").onclick = () => {
+      if (isTraining) return;
+      isTraining = true;
+      document.getElementById("ts-start").disabled = true;
+      document.getElementById("ts-stop").disabled  = false;
+      log("Training sandbox started");
+      runTrainingCycle();
+    };
+
+    document.getElementById("ts-stop").onclick = () => {
+      isTraining = false;
+      document.getElementById("ts-start").disabled = false;
+      document.getElementById("ts-stop").disabled  = true;
+      clearCtxPool();
+      tsStatus("Stopped");
+      log("Training sandbox stopped");
     };
 
     // ── Startup ──────────────────────────────────────────
