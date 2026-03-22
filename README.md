@@ -33,9 +33,9 @@ Commands:
 
 > Note: The crawler is implemented with a **mock provider** by default so it runs locally without network dependencies.
 
-### 2) Open the visualizer
+### 2) Open the site
 
-Open `web/visualizer.html` in any browser.
+Open `index.html` in a browser for the main landing page, then launch the visualizer from there (or open `web/visualizer.html` directly).
 
 ## Future integration points for SPORE
 
