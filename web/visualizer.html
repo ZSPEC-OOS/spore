@@ -371,6 +371,14 @@
     <div class="ts-metric"><span>🧬 ML Corpus</span><span id="ts-ml-corpus">—</span></div>
     <div class="ts-metric"><span>Avg Score</span><span id="ts-avg-score">—</span></div>
     <div class="ts-metric"><span>Readiness</span><span id="ts-readiness">—</span></div>
+    <button id="ts-reset-btn" style="width:100%;margin-top:6px;padding:5px 0;font-size:10px;
+      letter-spacing:.07em;text-transform:uppercase;background:transparent;
+      border:1px solid rgba(255,77,77,0.45);color:rgba(255,100,100,0.8);
+      border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;
+      transition:background .15s,color .15s"
+      title="Reset training cycle counter and score history (does not delete neurons)">
+      ↺ Reset Cycle Counter
+    </button>
     <div id="ts-status">Idle — attach AI model to begin</div>
 
     <div class="ts-block" id="ts-q-block">
@@ -1468,6 +1476,7 @@
         levelIter = levelPasses = 0;
         levelHistory = [];
         updateLevelDisplay();
+        persistTrainingState();
         log(`🎓 Level up → ${currentLevel} (${levelName(currentLevel)}): ${decision.reason}`, "ok");
         tsStatus(`🎓 Advancing to Level ${currentLevel} — ${levelName(currentLevel)}`);
         saveBrain();
@@ -1840,6 +1849,7 @@ Reply ONLY with this JSON (no other text):
         document.getElementById("ts-cycles").textContent    = tsCycles;
         document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
         document.getElementById("ts-readiness").textContent = readiness;
+        persistTrainingState();
 
         // ── Emergence trigger ──────────────────────────────
         // AI has determined (through sustained high scores) that
@@ -2019,6 +2029,7 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         document.getElementById("ts-cycles").textContent    = tsCycles;
         document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
         document.getElementById("ts-readiness").textContent = readiness;
+        persistTrainingState();
 
         if (!chatEmerged && avg >= 0.75 && tsCycles >= 5) emergeChat(avg, tsCycles);
 
@@ -2499,9 +2510,60 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       log("Mode: Distillation (closed-loop)");
     };
 
+    // ── Training state persistence ────────────────────────
+    const TS_KEY = "spore-training-state-v1";
+
+    function persistTrainingState() {
+      localStorage.setItem(TS_KEY, JSON.stringify({
+        tsCycles, tsCommits, currentLevel, levelIter, levelPasses,
+        tsScores: [...tsScores],
+      }));
+    }
+
+    function restoreTrainingState() {
+      try {
+        const raw = localStorage.getItem(TS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (typeof s.tsCycles    === "number") tsCycles    = s.tsCycles;
+        if (typeof s.tsCommits   === "number") tsCommits   = s.tsCommits;
+        if (typeof s.currentLevel=== "number") currentLevel= Math.max(1, Math.min(5, s.currentLevel));
+        if (typeof s.levelIter   === "number") levelIter   = s.levelIter;
+        if (typeof s.levelPasses === "number") levelPasses = s.levelPasses;
+        if (Array.isArray(s.tsScores)) { tsScores.length = 0; tsScores.push(...s.tsScores); }
+        // Refresh displayed metrics
+        document.getElementById("ts-cycles").textContent  = tsCycles;
+        document.getElementById("ts-commits").textContent = tsCommits;
+        if (tsScores.length) {
+          const avg = tsScores.reduce((a, b) => a + b, 0) / tsScores.length;
+          document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
+          document.getElementById("ts-readiness").textContent = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
+        }
+        updateLevelDisplay();
+        log(`📂 Restored training state — cycle ${tsCycles}, level ${currentLevel}`, "ok");
+      } catch (_) {}
+    }
+
+    document.getElementById("ts-reset-btn").onclick = function () {
+      if (!confirm(`Reset cycle counter and score history?\n\nCurrent: cycle ${tsCycles}, level ${currentLevel}\n\nThis does NOT delete neurons or learned knowledge.`)) return;
+      tsCycles = tsCommits = levelIter = levelPasses = 0;
+      currentLevel = 1;
+      tsScores.length = 0;
+      reorgCooldown = 0;
+      persistTrainingState();
+      document.getElementById("ts-cycles").textContent    = 0;
+      document.getElementById("ts-commits").textContent   = 0;
+      document.getElementById("ts-avg-score").textContent = "—";
+      document.getElementById("ts-readiness").textContent = "—";
+      updateLevelDisplay();
+      log("↺ Training state reset — cycle counter cleared", "warn");
+      tsStatus("↺ Reset — ready to start fresh");
+    };
+
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
     boot();
+    restoreTrainingState();   // restore before updateLevelDisplay so level is correct
     updateLevelDisplay();
     tryAutoLoad();
   </script>
