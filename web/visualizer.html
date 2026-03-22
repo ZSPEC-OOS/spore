@@ -1675,6 +1675,9 @@ Reply ONLY with this JSON (no other text):
         clearCtxPool();
       }
 
+      // Every 20 cycles — pause and spread nodes for readability
+      await afterCycle();
+
       // Schedule next cycle — rate limiters (DDG 4.3s, AI 3.4s) handle pacing.
       if (isTraining) {
         await new Promise(r => setTimeout(r, 1000));
@@ -1843,6 +1846,9 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         clearCtxPool();
       }
 
+      // Every 20 cycles — pause and spread nodes for readability
+      await afterCycle();
+
       if (isTraining) {
         await new Promise(r => setTimeout(r, 1000));
         if (isTraining) runNextCycle();
@@ -1941,6 +1947,98 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       tsStatus(`🔄 Reorg done — ${summary}`);
       await saveIndex();
       syncUI();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // LAYOUT RESTRUCTURE  (every 20 cycles)
+    // Pauses training and smoothly spreads nodes by layer so
+    // the graph stays readable as it grows.
+    // ══════════════════════════════════════════════════════
+    let isRestructuring = false;
+
+    async function restructureLayout() {
+      if (isRestructuring) return;
+      isRestructuring = true;
+
+      const canvas = document.getElementById("canvas");
+      const cx = canvas.width  / 2;
+      const cy = canvas.height / 2;
+      const live = neurons.filter(n => !n.dead);
+
+      log(`📐 Layout restructure — ${live.length} nodes`, "ok");
+      tsStatus(`📐 Restructuring layout (${live.length} nodes)…`);
+
+      // Flash the canvas border to signal restructure
+      canvas.style.transition = "outline .3s";
+      canvas.style.outline = "2px solid rgba(255,200,0,0.6)";
+      setTimeout(() => { canvas.style.outline = "none"; }, 1500);
+
+      // ── Group nodes by layer ──────────────────────────────
+      const byLayer = {};
+      live.forEach(n => {
+        const l = n.layer ?? 0;
+        (byLayer[l] = byLayer[l] || []).push(n);
+      });
+
+      const layers   = Object.keys(byLayer).map(Number).sort((a, b) => a - b);
+      const maxLayer = layers[layers.length - 1] || 1;
+
+      // Spacing: fit all layers in 90% of the smaller canvas dimension
+      const maxRadius = Math.min(cx, cy) * 0.88;
+      const spacing   = maxLayer > 0 ? Math.min(210, maxRadius / maxLayer) : maxRadius;
+
+      // ── Compute target x/y per node ───────────────────────
+      const targets = new Map();
+      layers.forEach(layer => {
+        const nodes = byLayer[layer];
+        const r     = layer === 0 ? 0 : layer * spacing;
+        // Stagger alternate layers slightly to reduce spoke-alignment
+        const offset = (layer % 2 === 0) ? 0 : Math.PI / nodes.length;
+        nodes.forEach((n, i) => {
+          const angle = offset + (2 * Math.PI * i) / nodes.length - Math.PI / 2;
+          targets.set(n, {
+            x: cx + (r === 0 ? 0 : Math.cos(angle) * r),
+            y: cy + (r === 0 ? 0 : Math.sin(angle) * r),
+          });
+        });
+      });
+
+      // ── Capture start positions ───────────────────────────
+      const starts = new Map();
+      live.forEach(n => starts.set(n, { x: n.x, y: n.y }));
+
+      // ── Ease-in-out animation over 90 frames (~1.5 s) ─────
+      const FRAMES = 90;
+      await new Promise(resolve => {
+        let frame = 0;
+        function step() {
+          frame++;
+          const t    = Math.min(frame / FRAMES, 1);
+          const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // quad ease in-out
+          live.forEach(n => {
+            const s   = starts.get(n);
+            const tgt = targets.get(n);
+            if (s && tgt) {
+              n.x = s.x + (tgt.x - s.x) * ease;
+              n.y = s.y + (tgt.y - s.y) * ease;
+            }
+          });
+          if (frame < FRAMES) requestAnimationFrame(step);
+          else resolve();
+        }
+        requestAnimationFrame(step);
+      });
+
+      tsStatus("📐 Restructure complete — resuming training");
+      log("📐 Layout settled", "ok");
+      isRestructuring = false;
+    }
+
+    // Called after every cycle; triggers restructure at multiples of 20
+    async function afterCycle() {
+      if (tsCycles > 0 && tsCycles % 20 === 0) {
+        await restructureLayout();
+      }
     }
 
     // ── IndexedDB — persist FileSystemDirectoryHandle ────
