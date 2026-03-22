@@ -188,14 +188,30 @@
       return localStorage.getItem("sporeServerUrl") || DEFAULT_API;
     }
 
-    // ── Kimi K2.5 known endpoints ────────────────────────
-    const KIMI_PRESETS = [
-      { label: "Moonshot AI (CN)",    baseUrl: "https://api.moonshot.cn/v1",   modelId: "kimi-k2-0711-preview" },
-      { label: "Moonshot AI (Global)",baseUrl: "https://api.moonshot.ai/v1",   modelId: "kimi-k2-0711-preview" },
-      { label: "OpenRouter",          baseUrl: "https://openrouter.ai/api/v1", modelId: "moonshotai/kimi-k2"   },
-      { label: "Together AI",         baseUrl: "https://api.together.xyz/v1",  modelId: "moonshotai/Kimi-K2"   },
+    // ── AI provider presets (Find ⟳ cycles through these) ─
+    const AI_PRESETS = [
+      // ── Kimi K2.5 ──────────────────────────────────────
+      { label: "Moonshot AI (CN)",     baseUrl: "https://api.moonshot.cn/v1",                modelId: "kimi-k2-0711-preview"     },
+      { label: "Moonshot AI (Global)", baseUrl: "https://api.moonshot.ai/v1",                modelId: "kimi-k2-0711-preview"     },
+      { label: "OpenRouter · Kimi",    baseUrl: "https://openrouter.ai/api/v1",              modelId: "moonshotai/kimi-k2"       },
+      { label: "Together AI · Kimi",   baseUrl: "https://api.together.xyz/v1",               modelId: "moonshotai/Kimi-K2"       },
+      { label: "Fireworks · Kimi",     baseUrl: "https://api.fireworks.ai/inference/v1",     modelId: "accounts/fireworks/models/kimi-k2" },
+      // ── General platforms ───────────────────────────────
+      { label: "OpenAI",               baseUrl: "https://api.openai.com/v1",                 modelId: "gpt-4o"                   },
+      { label: "xAI (Grok)",           baseUrl: "https://api.x.ai/v1",                       modelId: "grok-3"                   },
+      { label: "DeepSeek",             baseUrl: "https://api.deepseek.com/v1",               modelId: "deepseek-chat"            },
+      { label: "Groq",                 baseUrl: "https://api.groq.com/openai/v1",            modelId: "llama-3.3-70b-versatile"  },
+      { label: "Mistral",              baseUrl: "https://api.mistral.ai/v1",                 modelId: "mistral-large-latest"     },
+      { label: "Cerebras",             baseUrl: "https://api.cerebras.ai/v1",                modelId: "llama3.3-70b"             },
+      { label: "SambaNova",            baseUrl: "https://api.sambanova.ai/v1",               modelId: "Meta-Llama-3.3-70B-Instruct" },
+      { label: "Perplexity",           baseUrl: "https://api.perplexity.ai",                 modelId: "sonar-pro"                },
+      { label: "Cohere",               baseUrl: "https://api.cohere.ai/compatibility/v1",    modelId: "command-r-plus"           },
+      { label: "Hugging Face",         baseUrl: "https://api-inference.huggingface.co/v1",   modelId: ""                         },
+      { label: "OpenRouter (any)",     baseUrl: "https://openrouter.ai/api/v1",              modelId: ""                         },
+      { label: "Together AI (any)",    baseUrl: "https://api.together.xyz/v1",               modelId: ""                         },
+      { label: "Fireworks (any)",      baseUrl: "https://api.fireworks.ai/inference/v1",     modelId: ""                         },
     ];
-    let kimiIndex = 0;
+    let presetIndex = 0;
 
     // ── Neuron ───────────────────────────────────────────
     class Neuron {
@@ -435,15 +451,15 @@
       log(`Backend URL set to ${val || DEFAULT_API}`);
     });
 
-    // ── Find button — cycle Kimi K2.5 endpoints ──────────
+    // ── Find button — cycle all provider presets ─────────
     document.getElementById("find-url").onclick = () => {
-      const preset = KIMI_PRESETS[kimiIndex % KIMI_PRESETS.length];
-      kimiIndex++;
+      const preset = AI_PRESETS[presetIndex % AI_PRESETS.length];
+      presetIndex++;
       document.getElementById("ai-base-url").value = preset.baseUrl;
-      document.getElementById("ai-model").value    = preset.modelId;
+      if (preset.modelId) document.getElementById("ai-model").value = preset.modelId;
       document.getElementById("kimi-label").textContent =
-        `[${kimiIndex}/${KIMI_PRESETS.length}] ${preset.label}`;
-      log(`Preset: ${preset.label} — ${preset.modelId}`);
+        `[${presetIndex}/${AI_PRESETS.length}] ${preset.label}${preset.modelId ? "" : " — enter model ID"}`;
+      log(`Preset: ${preset.label}${preset.modelId ? " — " + preset.modelId : ""}`);
     };
 
     document.getElementById("save-ai-config").onclick = async () => {
