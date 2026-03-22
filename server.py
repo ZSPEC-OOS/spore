@@ -32,13 +32,33 @@ from spore import (
     DuckDuckGoSearchProvider,
     SearchProvider,
 )
+from spore.nlf import NLFFramework
 
 # ---------------------------------------------------------------------------
 # Config persistence (local JSON file — Firebase sync happens in the browser)
 # ---------------------------------------------------------------------------
 
 _CONFIG_PATH = Path(__file__).parent / "data" / "config.json"
+_NLF_STATE_PATH = Path(__file__).parent / "data" / "nlf_state.json"
+_NLF_STAGES_DIR = Path(__file__).parent / "data" / "nlf" / "stages"
 _WEB_DIR     = Path(__file__).parent / "web"
+
+# Singleton NLF framework (loaded lazily)
+_nlf_framework: NLFFramework | None = None
+
+
+def _get_nlf() -> NLFFramework:
+    global _nlf_framework
+    if _nlf_framework is None:
+        _nlf_framework = NLFFramework.load(_NLF_STATE_PATH)
+        # Auto-load any stage JSON files present in data/nlf/stages/
+        if _NLF_STAGES_DIR.exists():
+            for stage_file in sorted(_NLF_STAGES_DIR.glob("stage_*.json")):
+                try:
+                    _nlf_framework.load_stage_from_file(stage_file)
+                except Exception:
+                    pass
+    return _nlf_framework
 
 
 def _load_config() -> AIModelConfig:
@@ -97,6 +117,16 @@ class ProbeRequest(BaseModel):
     model_id: str
     base_url: str
     api_key: str
+
+
+class NLFStageRequest(BaseModel):
+    spec: dict
+
+
+class NLFCycleRequest(BaseModel):
+    category_id: str
+    gold_map: Optional[dict] = None
+    max_instances: int = 100
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +198,75 @@ async def test_search():
         "message": message,
         "provider": provider_name,
     }
+
+
+# ---------------------------------------------------------------------------
+# NLF Framework routes
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/nlf/stages")
+async def nlf_load_stage(req: NLFStageRequest):
+    """Load a stage spec dict into the NLF framework."""
+    fw = _get_nlf()
+    stage = fw.load_stage_from_dict(req.spec)
+    return {"status": "loaded", "stage": stage.number, "name": stage.name}
+
+
+@app.get("/api/nlf/stages")
+async def nlf_list_stages():
+    """List all loaded stages and their unlock/mastery status."""
+    fw = _get_nlf()
+    return fw.mastery_report()
+
+
+@app.get("/api/nlf/stages/{stage_number}")
+async def nlf_get_stage(stage_number: int):
+    """Return mastery details for a single stage."""
+    fw = _get_nlf()
+    stage = fw.get_stage(stage_number)
+    if stage is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Stage {stage_number} not loaded.")
+    report = fw.mastery_report()
+    return report.get(f"stage_{stage_number}", {})
+
+
+@app.post("/api/nlf/cycle")
+async def nlf_run_cycle(req: NLFCycleRequest):
+    """Run a training cycle for the specified category."""
+    fw = _get_nlf()
+    gold_map: dict | None = None
+    if req.gold_map:
+        gold_map = {k: int(v) for k, v in req.gold_map.items()}
+    try:
+        cycle, result = fw.run_cycle(
+            req.category_id,
+            gold_map=gold_map,
+            max_instances=req.max_instances,
+        )
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    fw.save(_NLF_STATE_PATH)
+    return {
+        "cycle_id": cycle.cycle_id,
+        "category_id": cycle.category_id,
+        "stage": cycle.stage_number,
+        "instances": len(cycle.instances),
+        "accuracy": round(result.accuracy, 4),
+        "correct": result.correct,
+        "incorrect": result.incorrect,
+        "preferred": result.preferred,
+    }
+
+
+@app.get("/api/nlf/mastery")
+async def nlf_mastery():
+    """Return full mastery report across all loaded stages."""
+    fw = _get_nlf()
+    return fw.mastery_report()
 
 
 # Serve static assets from web/ (must be mounted before the catch-all GET /)
