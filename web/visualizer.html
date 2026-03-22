@@ -75,7 +75,7 @@
     <section class="section" id="ai-config">
       <h4>AI Model Config (Search/Crawl)</h4>
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
-      <div class="row"><input id="ai-model" placeholder="Model ID (e.g. kimi-k2)" /></div>
+      <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2.5" /></div>
       <div class="row" style="align-items:center">
         <input id="ai-base-url" placeholder="Base URL" />
         <button id="find-url" title="Cycle Kimi K2.5 endpoints" style="width:auto;flex-shrink:0;padding:8px 8px;white-space:nowrap">Find ⟳</button>
@@ -188,14 +188,48 @@
       return localStorage.getItem("sporeServerUrl") || DEFAULT_API;
     }
 
-    // ── Kimi K2.5 known endpoints ────────────────────────
-    const KIMI_PRESETS = [
-      { label: "Moonshot AI (CN)",    baseUrl: "https://api.moonshot.cn/v1",   modelId: "kimi-k2-0711-preview" },
-      { label: "Moonshot AI (Global)",baseUrl: "https://api.moonshot.ai/v1",   modelId: "kimi-k2-0711-preview" },
-      { label: "OpenRouter",          baseUrl: "https://openrouter.ai/api/v1", modelId: "moonshotai/kimi-k2"   },
-      { label: "Together AI",         baseUrl: "https://api.together.xyz/v1",  modelId: "moonshotai/Kimi-K2"   },
+    // ── AI provider presets (Find ⟳ cycles through these) ─
+    const AI_PRESETS = [
+      // ── Moonshot official (CN) — all models ────────────
+      { label: "Moonshot CN · kimi-k2.5",        baseUrl: "https://api.moonshot.cn/v1",            modelId: "kimi-k2.5"                                 },
+      { label: "Moonshot CN · kimi-k2",          baseUrl: "https://api.moonshot.cn/v1",            modelId: "kimi-k2-0711-preview"                      },
+      { label: "Moonshot CN · k1.5-long",        baseUrl: "https://api.moonshot.cn/v1",            modelId: "kimi-k1.5-long"                            },
+      { label: "Moonshot CN · k1.5-short",       baseUrl: "https://api.moonshot.cn/v1",            modelId: "kimi-k1.5-short"                           },
+      { label: "Moonshot CN · v1-128k",          baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-128k"                          },
+      { label: "Moonshot CN · v1-32k",           baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-32k"                           },
+      { label: "Moonshot CN · v1-8k",            baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-8k"                            },
+      { label: "Moonshot CN · v1-8k-vision",     baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-8k-vision-preview"             },
+      { label: "Moonshot CN · v1-32k-vision",    baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-32k-vision-preview"            },
+      { label: "Moonshot CN · v1-128k-vision",   baseUrl: "https://api.moonshot.cn/v1",            modelId: "moonshot-v1-128k-vision-preview"           },
+      // ── Moonshot official (Global) — all models ────────
+      { label: "Moonshot Global · kimi-k2.5",    baseUrl: "https://api.moonshot.ai/v1",            modelId: "kimi-k2.5"                                 },
+      { label: "Moonshot Global · kimi-k2",      baseUrl: "https://api.moonshot.ai/v1",            modelId: "kimi-k2-0711-preview"                      },
+      { label: "Moonshot Global · k1.5-long",    baseUrl: "https://api.moonshot.ai/v1",            modelId: "kimi-k1.5-long"                            },
+      { label: "Moonshot Global · k1.5-short",   baseUrl: "https://api.moonshot.ai/v1",            modelId: "kimi-k1.5-short"                           },
+      { label: "Moonshot Global · v1-128k",      baseUrl: "https://api.moonshot.ai/v1",            modelId: "moonshot-v1-128k"                          },
+      { label: "Moonshot Global · v1-32k",       baseUrl: "https://api.moonshot.ai/v1",            modelId: "moonshot-v1-32k"                           },
+      { label: "Moonshot Global · v1-8k",        baseUrl: "https://api.moonshot.ai/v1",            modelId: "moonshot-v1-8k"                            },
+      // ── Third-party platforms hosting Kimi ─────────────
+      { label: "OpenRouter · kimi-k2",           baseUrl: "https://openrouter.ai/api/v1",          modelId: "moonshotai/kimi-k2"                        },
+      { label: "Together AI · kimi-k2",          baseUrl: "https://api.together.xyz/v1",           modelId: "moonshotai/Kimi-K2"                        },
+      { label: "Fireworks · kimi-k2",            baseUrl: "https://api.fireworks.ai/inference/v1", modelId: "accounts/fireworks/models/kimi-k2"         },
+      { label: "SiliconFlow · kimi-k2",          baseUrl: "https://api.siliconflow.cn/v1",         modelId: "moonshotai/Kimi-K2"                        },
+      // ── General platforms ───────────────────────────────
+      { label: "OpenAI",               baseUrl: "https://api.openai.com/v1",                 modelId: "gpt-4o"                   },
+      { label: "xAI (Grok)",           baseUrl: "https://api.x.ai/v1",                       modelId: "grok-3"                   },
+      { label: "DeepSeek",             baseUrl: "https://api.deepseek.com/v1",               modelId: "deepseek-chat"            },
+      { label: "Groq",                 baseUrl: "https://api.groq.com/openai/v1",            modelId: "llama-3.3-70b-versatile"  },
+      { label: "Mistral",              baseUrl: "https://api.mistral.ai/v1",                 modelId: "mistral-large-latest"     },
+      { label: "Cerebras",             baseUrl: "https://api.cerebras.ai/v1",                modelId: "llama3.3-70b"             },
+      { label: "SambaNova",            baseUrl: "https://api.sambanova.ai/v1",               modelId: "Meta-Llama-3.3-70B-Instruct" },
+      { label: "Perplexity",           baseUrl: "https://api.perplexity.ai",                 modelId: "sonar-pro"                },
+      { label: "Cohere",               baseUrl: "https://api.cohere.ai/compatibility/v1",    modelId: "command-r-plus"           },
+      { label: "Hugging Face",         baseUrl: "https://api-inference.huggingface.co/v1",   modelId: ""                         },
+      { label: "OpenRouter (any)",     baseUrl: "https://openrouter.ai/api/v1",              modelId: ""                         },
+      { label: "Together AI (any)",    baseUrl: "https://api.together.xyz/v1",               modelId: ""                         },
+      { label: "Fireworks (any)",      baseUrl: "https://api.fireworks.ai/inference/v1",     modelId: ""                         },
     ];
-    let kimiIndex = 0;
+    let presetIndex = 0;
 
     // ── Neuron ───────────────────────────────────────────
     class Neuron {
@@ -419,7 +453,10 @@
 
     function loadAiConfigFromStorage() {
       const raw = localStorage.getItem("sporeAiConfig");
-      if (!raw) return;
+      if (!raw) {
+        document.getElementById("ai-model").value = "kimi-k2.5";
+        return;
+      }
       try { applyAiConfigToForm(JSON.parse(raw)); } catch (_) {}
     }
 
@@ -435,15 +472,80 @@
       log(`Backend URL set to ${val || DEFAULT_API}`);
     });
 
-    // ── Find button — cycle Kimi K2.5 endpoints ──────────
-    document.getElementById("find-url").onclick = () => {
-      const preset = KIMI_PRESETS[kimiIndex % KIMI_PRESETS.length];
-      kimiIndex++;
-      document.getElementById("ai-base-url").value = preset.baseUrl;
-      document.getElementById("ai-model").value    = preset.modelId;
-      document.getElementById("kimi-label").textContent =
-        `[${kimiIndex}/${KIMI_PRESETS.length}] ${preset.label}`;
-      log(`Preset: ${preset.label} — ${preset.modelId}`);
+    // ── Find button — auto-probe all base URLs for a model ─
+    let isScanning = false;
+
+    document.getElementById("find-url").onclick = async () => {
+      if (isScanning) return;
+
+      const modelId = document.getElementById("ai-model").value.trim();
+      const apiKey  = document.getElementById("ai-api-key").value.trim();
+      const label   = document.getElementById("kimi-label");
+
+      // No model ID — fall back to manual cycle through all presets.
+      if (!modelId) {
+        const preset = AI_PRESETS[presetIndex % AI_PRESETS.length];
+        presetIndex++;
+        document.getElementById("ai-base-url").value = preset.baseUrl;
+        document.getElementById("ai-model").value    = preset.modelId || document.getElementById("ai-model").value;
+        label.textContent = `[${presetIndex}/${AI_PRESETS.length}] ${preset.label}${preset.modelId ? "" : " — enter model ID"}`;
+        log(`Preset: ${preset.label}${preset.modelId ? " — " + preset.modelId : ""}`);
+        return;
+      }
+
+      // Collect candidate base URLs: presets matching this model ID first,
+      // then all other unique base URLs not already included.
+      const matched   = AI_PRESETS.filter(p => p.modelId === modelId);
+      const matchUrls = [...new Set(matched.map(p => p.baseUrl))];
+      const otherUrls = [...new Set(AI_PRESETS.map(p => p.baseUrl))].filter(u => !matchUrls.includes(u));
+      const candidates = [...matchUrls, ...otherUrls];
+
+      if (!apiKey) {
+        label.textContent = "⚠ Enter API Key before scanning";
+        log("Auto-scan needs an API key to probe endpoints", "err");
+        return;
+      }
+
+      isScanning = true;
+      document.getElementById("find-url").textContent = "Scanning…";
+      document.getElementById("find-url").disabled = true;
+      label.textContent = `Probing ${candidates.length} base URLs…`;
+      log(`Auto-scanning ${candidates.length} URLs for model: ${modelId}`);
+
+      let found = null;
+      for (let i = 0; i < candidates.length; i++) {
+        const url = candidates[i];
+        const shortUrl = url.replace("https://", "").replace("/v1", "");
+        label.textContent = `[${i + 1}/${candidates.length}] Testing ${shortUrl}…`;
+        try {
+          const res  = await fetch(`${getAPI()}/api/test/ai/probe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: modelId, base_url: url, api_key: apiKey }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            document.getElementById("ai-base-url").value = url;
+            label.textContent = `✅ [${i + 1}/${candidates.length}] ${shortUrl}`;
+            log(`✅ Found: ${shortUrl} — ${data.message}`, "ok");
+            found = url;
+            break;
+          } else {
+            log(`❌ ${shortUrl}: ${data.message}`, "err");
+          }
+        } catch (err) {
+          log(`❌ ${shortUrl}: ${err.message}`, "err");
+        }
+      }
+
+      if (!found) {
+        label.textContent = `❌ No working URL found for ${modelId}`;
+        log(`No working base URL found for ${modelId}`, "err");
+      }
+
+      isScanning = false;
+      document.getElementById("find-url").textContent = "Find ⟳";
+      document.getElementById("find-url").disabled = false;
     };
 
     document.getElementById("save-ai-config").onclick = async () => {
