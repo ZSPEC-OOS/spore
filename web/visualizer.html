@@ -42,7 +42,12 @@
       margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25);
       padding-top: 10px;
     }
-    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; }
+    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; display:flex; align-items:center; justify-content:space-between; cursor:default; }
+    .section h4 .collapse-btn { cursor:pointer; font-size:10px; opacity:.6; transition:transform .2s, opacity .2s; user-select:none; }
+    .section h4 .collapse-btn:hover { opacity:1; }
+    .section h4 .collapse-btn.collapsed { transform:rotate(-90deg); }
+    #ai-collapsible { overflow:hidden; transition:max-height .25s ease; max-height:1000px; }
+    #ai-collapsible.collapsed { max-height:0; }
     .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.4; }
     .status-dot {
       display: inline-block; width: 7px; height: 7px;
@@ -73,7 +78,8 @@
 
     <!-- ── AI Model Config ─────────────────────────────── -->
     <section class="section" id="ai-config">
-      <h4>AI Model Config (Search/Crawl)</h4>
+      <h4>AI Model Config (Search/Crawl) <span class="collapse-btn" id="ai-collapse-btn" title="Collapse">▼</span></h4>
+    <div id="ai-collapsible">
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
       <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2.5" /></div>
       <div class="row" style="align-items:center">
@@ -112,7 +118,8 @@
       </p>
     </section>
 
-    <div id="log"></div>
+      <div id="log"></div>
+    </div><!-- #ai-collapsible -->
   </aside>
 
   <!-- ─────────────────────────────────────────────────── -->
@@ -634,6 +641,15 @@
 
     document.getElementById("test-ai").onclick     = testAiDirect;
     document.getElementById("test-search").onclick = testSearchViaServer;
+
+    // ── Collapse toggle ───────────────────────────────
+    document.getElementById("ai-collapse-btn").onclick = () => {
+      const panel = document.getElementById("ai-collapsible");
+      const btn   = document.getElementById("ai-collapse-btn");
+      const open  = !panel.classList.toggle("collapsed");
+      btn.classList.toggle("collapsed", !open);
+      btn.title = open ? "Collapse" : "Expand";
+    };
 
     // ── Firebase ─────────────────────────────────────────
     function setFirebaseStatus(connected, label) {
