@@ -239,10 +239,33 @@
     #np-url { display: block; margin-top: 10px; color: #00f2ff; word-break: break-all; text-decoration: underline; }
     #np-close { float: right; cursor: pointer; opacity: .6; font-size: 14px; margin: -4px -4px 0 0; }
     #np-close:hover { opacity: 1; }
+    /* ── Canvas overlay controls (pause / hide) ─────────── */
+    #canvas-controls {
+      position: fixed; top: 14px; right: 52px; z-index: 15;
+      display: flex; gap: 6px; align-items: center;
+    }
+    .cvs-btn {
+      padding: 5px 11px; font-size: 10px; letter-spacing: .07em;
+      text-transform: uppercase; border-radius: 5px; cursor: pointer;
+      font-family: "Courier New", monospace; user-select: none;
+      background: rgba(10,10,26,0.88); border: 1px solid rgba(0,242,255,0.35);
+      color: rgba(0,242,255,0.75); transition: background .15s, box-shadow .15s, color .15s;
+    }
+    .cvs-btn:hover { box-shadow: 0 0 10px rgba(0,242,255,0.22); color: #00f2ff; }
+    .cvs-btn.active {
+      background: rgba(0,242,255,0.13); border-color: #00f2ff; color: #00f2ff;
+      box-shadow: 0 0 14px rgba(0,242,255,0.28);
+    }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+
+  <!-- ── Canvas overlay controls ──────────────────────── -->
+  <div id="canvas-controls">
+    <button class="cvs-btn" id="btn-anim-pause" title="Pause / resume the visual animation">⏸ Pause</button>
+    <button class="cvs-btn" id="btn-hide-brain" title="Hide the neural canvas to free up GPU/CPU">◉ Hide Brain</button>
+  </div>
 
   <aside id="ui">
     <h3>🧠 SPORE</h3>
@@ -345,6 +368,7 @@
     <div id="ts-mode-hint" style="font-size:10px;color:#8deaff;margin-bottom:6px;min-height:13px">Web search → SPORE</div>
     <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
     <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
+    <div class="ts-metric"><span>🧬 ML Corpus</span><span id="ts-ml-corpus">—</span></div>
     <div class="ts-metric"><span>Avg Score</span><span id="ts-avg-score">—</span></div>
     <div class="ts-metric"><span>Readiness</span><span id="ts-readiness">—</span></div>
     <div id="ts-status">Idle — attach AI model to begin</div>
@@ -889,15 +913,23 @@
     }
 
     function render() {
-      ctx.fillStyle = "rgba(10,10,26,0.22)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.translate(camera.x, camera.y);
-      ctx.scale(camera.scale, camera.scale);
-      synapses.forEach(s => { s.update(); s.draw(); });
-      neurons.forEach(n => { n.update(); n.draw(); });
-      particles = particles.filter(p => { p.update(); p.draw(); return p.life > 0; });
-      ctx.restore();
+      if (!brainHidden) {
+        ctx.fillStyle = "rgba(10,10,26,0.22)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(camera.x, camera.y);
+        ctx.scale(camera.scale, camera.scale);
+        if (animPaused) {
+          // Frozen snapshot — draw without advancing any state
+          synapses.forEach(s => s.draw());
+          neurons.forEach(n => n.draw());
+        } else {
+          synapses.forEach(s => { s.update(); s.draw(); });
+          neurons.forEach(n => { n.update(); n.draw(); });
+          particles = particles.filter(p => { p.update(); p.draw(); return p.life > 0; });
+        }
+        ctx.restore();
+      }
       if (isLearning && Math.random() > 0.94) simulateStep();
 
       // Purge fully-faded dead neurons and their dangling synapses
@@ -1381,6 +1413,8 @@
 
     let isTraining      = false;
     let distillationMode = false;   // false = standard (web search), true = closed-loop AI distillation
+    let animPaused      = false;    // freeze visual animation (nodes/synapses stop moving)
+    let brainHidden     = false;    // hide canvas entirely for performance
     let tsCycles        = 0;
     let tsCommits       = 0;
     const tsScores      = [];      // rolling window (last 20)
@@ -1462,9 +1496,180 @@
       return (data.choices?.[0]?.message?.content || "").trim();
     }
 
+    // ══════════════════════════════════════════════════════
+    // SPORE ML — on-device language model
+    // Trains a bigram + trigram Markov chain on all accumulated
+    // knowledge snippets and synthesizes novel responses that
+    // go beyond raw snippet concatenation.
+    // Rough output is intentional — SPORE is still learning.
+    // ══════════════════════════════════════════════════════
+    class SporeML {
+      constructor() {
+        this.bigrams      = new Map(); // word → Map(nextWord → count)
+        this.trigrams     = new Map(); // "w1 w2" → Map(nextWord → count)
+        this.sentStarts   = [];        // sentence-opening words for seeding
+        this.vocabSize    = 0;
+        this.corpusTokens = 0;
+        this.trained      = false;
+      }
+
+      _tokenize(text) {
+        return text.toLowerCase()
+          .replace(/[^a-z0-9 '.?!,;:]/g, " ")
+          .replace(/([.?!,;:])/g, " $1 ")
+          .split(/\s+/)
+          .filter(w => w.length > 0);
+      }
+
+      // Rebuild the n-gram model from all permanent neuron snippets
+      train() {
+        const raw = neurons
+          .filter(n => n.type === "permanent" && !n.dead)
+          .flatMap(n => [
+            ...(n.snippets || []).map(s => s.text || ""),
+            n.snippet || "",
+          ])
+          .filter(s => s.length > 20);
+        if (!raw.length) { this.trained = false; return 0; }
+
+        this.bigrams.clear();
+        this.trigrams.clear();
+        this.sentStarts = [];
+        let total = 0;
+        const vocab = new Set();
+
+        raw.forEach(snippet => {
+          const sents = snippet.split(/[.!?]\s+/);
+          sents.forEach(sent => {
+            const tok = this._tokenize(sent);
+            if (!tok.length) return;
+            this.sentStarts.push(tok[0]);
+            total += tok.length;
+            tok.forEach(w => vocab.add(w));
+            for (let i = 0; i < tok.length - 1; i++) {
+              const bi = this.bigrams.get(tok[i]) || new Map();
+              bi.set(tok[i + 1], (bi.get(tok[i + 1]) || 0) + 1);
+              this.bigrams.set(tok[i], bi);
+            }
+            for (let i = 0; i < tok.length - 2; i++) {
+              const key = tok[i] + "\x00" + tok[i + 1];
+              const tri = this.trigrams.get(key) || new Map();
+              tri.set(tok[i + 2], (tri.get(tok[i + 2]) || 0) + 1);
+              this.trigrams.set(key, tri);
+            }
+          });
+        });
+
+        this.vocabSize    = vocab.size;
+        this.corpusTokens = total;
+        this.trained      = total >= 50;
+        return total;
+      }
+
+      _pick(map) {
+        const total = [...map.values()].reduce((a, b) => a + b, 0);
+        let r = Math.random() * total;
+        for (const [w, c] of map) { r -= c; if (r <= 0) return w; }
+        return [...map.keys()].at(-1);
+      }
+
+      // Markov chain: trigram preferred, bigram fallback
+      generate(seedWord, maxTokens = 28) {
+        if (!this.trained) return null;
+        let cur = seedWord.toLowerCase();
+        if (!this.bigrams.has(cur)) {
+          if (!this.sentStarts.length) return null;
+          cur = this.sentStarts[Math.floor(Math.random() * this.sentStarts.length)];
+        }
+        const out = [cur];
+        for (let i = 0; i < maxTokens; i++) {
+          const triKey = out.length >= 2 ? out[out.length - 2] + "\x00" + out[out.length - 1] : null;
+          const map    = (triKey && this.trigrams.has(triKey))
+            ? this.trigrams.get(triKey)
+            : this.bigrams.get(out[out.length - 1]);
+          if (!map || !map.size) break;
+          const next = this._pick(map);
+          out.push(next);
+          if (next === "." || next === "!" || next === "?") break;
+        }
+        let text = "";
+        out.forEach((w, i) => {
+          text = /^[.?!,;:]$/.test(w) ? text.trimEnd() + w : text + (i ? " " : "") + w;
+        });
+        return text.trim();
+      }
+
+      // Full ML respond — scored retrieval + Markov synthesis
+      respond(question) {
+        if (!this.trained || this.corpusTokens < 80) return null;
+
+        const STOP = new Set(["the","a","an","is","are","was","were","be","been","have",
+          "has","had","do","does","did","will","would","could","should","can","what","how",
+          "why","when","where","who","that","this","with","from","for","and","or","but",
+          "not","its","it","in","on","at","by","to","of","i","you","we","they","he","she"]);
+        const qWords = question.toLowerCase()
+          .replace(/[^a-z ]/g, " ").split(/\s+/)
+          .filter(w => w.length > 3 && !STOP.has(w));
+        if (!qWords.length) return null;
+
+        const scored = neurons
+          .filter(n => n.type === "permanent" && !n.dead && (n.snippets?.length || n.snippet))
+          .map(n => {
+            const corpus = (n.snippets || []).map(s => s.text).concat(n.snippet || "").join(" ").toLowerCase();
+            return { n, score: qWords.reduce((s, w) => s + (corpus.includes(w) ? 1 : 0), 0) };
+          })
+          .filter(x => x.score > 0)
+          .sort((a, b) => b.score - a.score);
+
+        if (!scored.length) return null;
+
+        const BRIDGE = ["Furthermore, ", "Additionally, ", "Related to this, ", "It is also noted that "];
+        const seeds  = qWords.filter(w => this.bigrams.has(w));
+        const parts  = [];
+
+        // 1. Grounded sentence from best-matching node
+        const topSnips = scored[0].n.snippets?.length ? scored[0].n.snippets : [{ text: scored[0].n.snippet }];
+        const topSent  = (topSnips.at(-1)?.text || "").split(/[.!?]/)[0].trim();
+        if (topSent.length > 20) parts.push(topSent + ".");
+
+        // 2. ML-generated sentence seeded by a question keyword
+        if (seeds.length) {
+          const gen = this.generate(seeds[0], 26);
+          if (gen && gen.split(" ").length >= 5)
+            parts.push(gen.charAt(0).toUpperCase() + gen.slice(1) + (gen.endsWith(".") ? "" : "."));
+        }
+
+        // 3. Second grounded fact from next-best node
+        if (scored.length > 1) {
+          const alt     = scored[1].n;
+          const altSnips = alt.snippets?.length ? alt.snippets : [{ text: alt.snippet }];
+          const altSent  = (altSnips.at(-1)?.text || "").split(/[.!?]/).find(s => s.trim().length > 20)?.trim();
+          if (altSent) parts.push(BRIDGE[parts.length % BRIDGE.length] + altSent.charAt(0).toLowerCase() + altSent.slice(1) + ".");
+        }
+
+        // 4. Optional second ML extension
+        if (seeds.length > 1 && parts.length < 3) {
+          const gen2 = this.generate(seeds[1], 22);
+          if (gen2 && gen2.split(" ").length >= 5)
+            parts.push(BRIDGE[1] + gen2.charAt(0).toLowerCase() + gen2.slice(1) + (gen2.endsWith(".") ? "" : "."));
+        }
+
+        return parts.length ? parts.join(" ") : null;
+      }
+    }
+
+    const sporeML = new SporeML();
+
     // ── SPORE response engine ─────────────────────────────
     // ISOLATION ENFORCED: no AI calls, only knowledge bank + context neurons.
+    // Primary path: SporeML (Markov + scored retrieval).
+    // Fallback: raw snippet concatenation.
     function sporeRespond(question, contextNeurons) {
+      // ── ML primary path ──────────────────────────────────
+      const mlReply = sporeML.respond(question);
+      if (mlReply) return mlReply;
+
+      // ── Fallback: raw snippet concatenation ──────────────
       const STOP = new Set(["the","a","an","is","are","was","were","be","been","have","has","had","do","does","did","will","would","could","should","can","what","how","why","when","where","who","that","this","with","from","for","and","or","but","not","its","it","in","on","at","by","to","of"]);
       const qWords = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 3 && !STOP.has(w));
       if (!qWords.length) return "Insufficient query tokens to retrieve knowledge.";
@@ -1530,6 +1735,10 @@
         saveNodeFile(n); // write just this node's file, not the whole brain
       });
       ctxPool = [];
+      // Retrain ML model with the newly committed knowledge
+      const tok = sporeML.train();
+      const mlEl = document.getElementById("ts-ml-corpus");
+      if (mlEl) mlEl.textContent = tok > 0 ? tok + " tok / " + sporeML.vocabSize + " vocab" : "—";
       saveIndex(); // update synapse graph
     }
 
@@ -2254,6 +2463,24 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         brainDirHandle = null;
       }
     }
+
+    // ── Canvas control buttons ────────────────────────────
+    document.getElementById("btn-anim-pause").onclick = function () {
+      animPaused = !animPaused;
+      this.textContent = animPaused ? "▶ Resume" : "⏸ Pause";
+      this.classList.toggle("active", animPaused);
+      this.title = animPaused ? "Resume animation" : "Pause the visual animation";
+      log(animPaused ? "Animation paused" : "Animation resumed");
+    };
+
+    document.getElementById("btn-hide-brain").onclick = function () {
+      brainHidden = !brainHidden;
+      canvas.style.display = brainHidden ? "none" : "block";
+      this.textContent = brainHidden ? "◉ Show Brain" : "◉ Hide Brain";
+      this.classList.toggle("active", brainHidden);
+      this.title = brainHidden ? "Show the neural canvas" : "Hide the neural canvas to free up GPU/CPU";
+      log(brainHidden ? "Brain hidden — canvas rendering paused" : "Brain visible");
+    };
 
     // ── Training mode toggle ──────────────────────────────
     document.getElementById("ts-mode-standard").onclick = () => {
