@@ -569,7 +569,7 @@
 
     // ── Diagnostics ──────────────────────────────────────
 
-    // AI test — calls the provider directly from the browser, no server needed.
+    // AI test — proxied through server.py to avoid browser CORS restrictions.
     async function testAiDirect() {
       const cfg     = getAiConfigFromForm();
       const statusEl = document.getElementById("diag-status");
@@ -585,38 +585,34 @@
         return;
       }
 
-      const baseUrl = (cfg.base_url || "https://api.openai.com/v1").replace(/\/$/, "");
+      // Normalise base URL — ensure it has a protocol so server.py can reach it.
+      let baseUrl = (cfg.base_url || "https://api.openai.com/v1").trim().replace(/\/$/, "");
+      if (!/^https?:\/\//i.test(baseUrl)) baseUrl = "https://" + baseUrl;
+
       statusEl.textContent = `Testing ${baseUrl}…`;
 
       try {
-        const res = await fetch(`${baseUrl}/chat/completions`, {
+        const res = await fetch(`${getAPI()}/api/test/ai/probe`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${cfg.api_key}`,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: cfg.model_id,
-            messages: [
-              { role: "system", content: "You validate API connectivity." },
-              { role: "user",   content: "Reply with exactly: OK" },
-            ],
-            max_tokens: 5,
+            model_id: cfg.model_id,
+            base_url: baseUrl,
+            api_key:  cfg.api_key,
           }),
         });
 
         const data = await res.json();
-        if (data.error) {
-          statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${data.error.message || JSON.stringify(data.error)}`;
-          log(`❌ AI: ${data.error.message || JSON.stringify(data.error)}`, "err");
+        if (data.ok) {
+          statusEl.innerHTML = `✅ <strong>AI Model:</strong> ${data.message}`;
+          log(`✅ AI: ${cfg.model_id} at ${baseUrl} — ${data.message}`, "ok");
         } else {
-          const reply = data.choices?.[0]?.message?.content || "(no content)";
-          statusEl.innerHTML = `✅ <strong>AI Model:</strong> Connected — "${reply}"`;
-          log(`✅ AI: ${cfg.model_id} at ${baseUrl} — "${reply}"`, "ok");
+          statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${data.message}`;
+          log(`❌ AI: ${data.message}`, "err");
         }
       } catch (err) {
-        statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${err.message}`;
-        log(`❌ AI fetch error: ${err.message}`, "err");
+        statusEl.innerHTML = `❌ <strong>AI Model:</strong> server.py not running at ${getAPI()}`;
+        log(`❌ AI test: server.py unreachable — ${err.message}`, "err");
       }
     }
 
