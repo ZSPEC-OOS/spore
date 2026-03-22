@@ -1,3 +1,14 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.env
+.venv
+venv/
+
+# Runtime-generated config (never commit API keys)
+data/config.json
+config.json
