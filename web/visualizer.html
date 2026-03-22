@@ -120,10 +120,6 @@
       padding: 10px 14px 8px; border-bottom: 1px solid rgba(0,242,255,0.15);
     }
     #chat-header h3 { font-size: 13px; }
-    #chat-readiness-badge {
-      font-size: 10px; padding: 2px 8px; border-radius: 4px;
-      background: rgba(0,255,136,0.12); color: #00ff88; border: 1px solid #00ff88;
-    }
     #chat-history {
       height: 180px; overflow-y: auto; padding: 10px 14px;
       display: flex; flex-direction: column; gap: 8px;
@@ -270,40 +266,27 @@
     #sv-title { font-size: 13px; color: #00f2ff; letter-spacing: .04em; }
     #sv-live-dot { color: #00ff88; animation: blink .8s step-end infinite; }
     #sv-grid {
-      display: flex; flex-wrap: wrap; gap: 7px;
-      overflow-y: auto; align-content: flex-start; flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 18px);
+      gap: 4px;
+      overflow-y: auto; align-content: start; flex: 1;
+      padding: 4px;
     }
     #sv-grid::-webkit-scrollbar { width: 4px; }
     #sv-grid::-webkit-scrollbar-thumb { background: #00f2ff22; border-radius: 4px; }
-    .sv-card {
-      width: 148px; padding: 8px 10px; border-radius: 6px;
-      border: 1px solid rgba(0,242,255,0.18);
-      background: rgba(0,242,255,0.03);
-      transition: border-color 0.35s, background 0.35s, box-shadow 0.35s;
+    .sv-dot {
+      width: 18px; height: 18px; border-radius: 3px;
+      background: rgba(0,242,255,0.18);
+      transition: background 0.4s, box-shadow 0.4s, transform 0.2s;
+      cursor: default; position: relative;
     }
-    .sv-card.sv-ctx {
-      border-color: rgba(255,140,0,0.25); background: rgba(255,140,0,0.04);
+    .sv-dot.sv-dst { background: rgba(255,140,0,0.22); }
+    .sv-dot.sv-active {
+      background: #00f2ff; box-shadow: 0 0 8px #00f2ffaa; transform: scale(1.15);
     }
-    .sv-card.sv-active {
-      border-color: #00f2ff; background: rgba(0,242,255,0.10);
-      box-shadow: 0 0 12px rgba(0,242,255,0.25);
-    }
-    .sv-card.sv-ctx.sv-active {
-      border-color: #ff8c00; background: rgba(255,140,0,0.13);
-      box-shadow: 0 0 12px rgba(255,140,0,0.3);
-    }
-    .sv-concept {
-      font-size: 11px; color: #00f2ff; margin-bottom: 4px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .sv-card.sv-ctx .sv-concept { color: #ff8c00; }
-    .sv-meta { color: #8deaff; font-size: 9px; }
-    .sv-bar { height: 2px; background: rgba(0,242,255,0.12); border-radius: 1px; margin-top: 5px; }
-    .sv-bar-fill { height: 100%; background: rgba(0,242,255,0.55); border-radius: 1px; transition: width 0.6s; }
-    .sv-card.sv-ctx .sv-bar-fill { background: rgba(255,140,0,0.6); }
-    .sv-card.sv-active .sv-bar-fill { background: #00f2ff; }
-    .sv-card.sv-ctx.sv-active .sv-bar-fill { background: #ff8c00; }
-    #sv-overflow { font-size: 10px; color: #8deaff55; text-align: center; padding: 6px 0; }
+    .sv-dot.sv-dst.sv-active { background: #ff8c00; box-shadow: 0 0 8px #ff8c00aa; transform: scale(1.15); }
+    /* knowledge-level brightness via inline opacity set in JS */
+    #sv-overflow { font-size: 10px; color: #8deaff55; text-align: center; padding: 4px 0; }
   </style>
 </head>
 <body>
@@ -363,7 +346,6 @@
       <h4>Diagnostics</h4>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
-        <button id="test-search" class="btn-warn">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
       <p class="hint">Both tests run directly from your browser — no server needed.</p>
@@ -390,24 +372,12 @@
     <!-- ── Brain Storage ──────────────────────────────── -->
     <section class="section" id="brain-storage">
       <h4>🗂 Brain Storage</h4>
+      <div style="font-size:10px;color:#8deaff;letter-spacing:.05em;margin-bottom:5px">☁ FIREBASE CLOUD</div>
       <div class="row">
-        <button id="choose-folder">📁 Choose Folder</button>
-        <button id="reconnect-folder" style="display:none;width:auto;padding:6px 10px">🔓 Reconnect</button>
+        <button id="fb-save-brain">☁ Save All</button>
+        <button id="fb-load-brain">☁ Load</button>
       </div>
-      <div id="folder-path" style="font-size:10px;color:#8deaff;margin-top:4px;word-break:break-all;min-height:13px">No folder selected — brain lives in memory only</div>
-      <div class="row">
-        <button id="save-brain" disabled>💾 Save Brain</button>
-        <button id="load-brain" disabled>📂 Load Brain</button>
-      </div>
-      <!-- Firebase cloud storage -->
-      <div style="margin-top:8px;border-top:1px solid rgba(0,242,255,0.12);padding-top:8px">
-        <div style="font-size:10px;color:#8deaff;letter-spacing:.05em;margin-bottom:5px">☁ FIREBASE CLOUD</div>
-        <div class="row">
-          <button id="fb-save-brain">☁ Save All</button>
-          <button id="fb-load-brain">☁ Load</button>
-        </div>
-        <div id="fb-sync-status" style="font-size:10px;color:#8deaff;margin-top:4px;min-height:13px">Auto-syncs index after each training cycle</div>
-      </div>
+      <div id="fb-sync-status" style="font-size:10px;color:#8deaff;margin-top:4px;min-height:13px">Auto-syncs index after each training cycle</div>
     </section>
   </aside>
 
@@ -431,12 +401,6 @@
       <h3>🎓 Training Sandbox</h3>
       <span id="ts-live-badge" style="font-size:10px;color:#8deaff;opacity:0.6">● idle</span>
     </div>
-    <!-- ── Mode toggle ─────────────────────────────────── -->
-    <div style="display:flex;gap:6px;margin-bottom:8px">
-      <button class="ts-mode-btn active" id="ts-mode-standard">⚙ Standard</button>
-      <button class="ts-mode-btn"        id="ts-mode-distill" >⚗ Distillation</button>
-    </div>
-    <div id="ts-mode-hint" style="font-size:10px;color:#8deaff;margin-bottom:6px;min-height:13px">Web search → SPORE</div>
     <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
     <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
     <div class="ts-metric"><span>🧬 ML Corpus</span><span id="ts-ml-corpus">—</span></div>
@@ -478,7 +442,6 @@
   <div id="chat-panel">
     <div id="chat-header">
       <h3>💬 SPORE Chat</h3>
-      <span id="chat-readiness-badge">✅ General Chat Unlocked</span>
     </div>
     <div id="chat-history"></div>
     <div id="chat-emergence-note">
@@ -991,10 +954,8 @@
       syncUI();
     }
 
-    // ── Rate limiters — shared across all DDG and AI calls ───
-    // DDG: ≤14/min (safe under 15/min guideline) → 4.3 s gap
+    // ── Rate limiter — AI calls ───────────────────────────
     // AI : ≤18/min (safe under 20 RPM limit)     → 3.4 s gap
-    const ddgLimiter = { last: 0, gap: 4300 };
     const aiLimiter  = { last: 0, gap: 3400 };
 
     async function rateWait(limiter, label) {
@@ -1004,69 +965,6 @@
         await new Promise(r => setTimeout(r, wait));
       }
       limiter.last = Date.now();
-    }
-
-    // ── DuckDuckGo Instant Answer search — robust with retry ─
-    async function ddgSearch(query) {
-      await rateWait(ddgLimiter, "DDG");
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1&skip_disambig=1&t=spore`;
-
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          const out  = [];
-
-          if (data.AbstractText && data.AbstractURL)
-            out.push({ title: data.Heading || query, url: data.AbstractURL, snippet: data.AbstractText });
-          for (const r of data.Results || [])
-            if (r.FirstURL) out.push({ title: r.Text || query, url: r.FirstURL, snippet: r.Text || "" });
-          for (const t of data.RelatedTopics || []) {
-            if (t.Text && t.FirstURL && !t.Topics) {
-              const d = t.Text.indexOf(" - ");
-              out.push({ title: d > -1 ? t.Text.slice(0, d) : t.Text.slice(0, 50), url: t.FirstURL,
-                snippet: d > -1 ? t.Text.slice(d + 3) : t.Text });
-            }
-            for (const sub of t.Topics || []) {
-              if (sub.Text && sub.FirstURL) {
-                const d = sub.Text.indexOf(" - ");
-                out.push({ title: d > -1 ? sub.Text.slice(0, d) : sub.Text.slice(0, 50), url: sub.FirstURL,
-                  snippet: d > -1 ? sub.Text.slice(d + 3) : sub.Text });
-              }
-            }
-          }
-          if (!out.length) { log(`DDG: no structured results for "${query}" — skipping`, "warn"); return []; }
-          return out.slice(0, 8);
-
-        } catch (err) {
-          if (attempt < 2) {
-            const backoff = (attempt + 1) * 6000;
-            log(`DDG error (retry ${attempt + 1} in ${backoff / 1000}s): ${err.message}`, "warn");
-            await new Promise(r => setTimeout(r, backoff));
-          } else {
-            log(`DDG failed after 3 attempts: ${err.message}`, "err");
-            return [];
-          }
-        }
-      }
-      return [];
-    }
-
-    // Grow neurons from real search results
-    async function learnFromQuery(query) {
-      log(`Searching: ${query}`);
-      const results = await ddgSearch(query);
-      if (!results.length) { log(`No results for: ${query}`, "err"); return; }
-      for (const r of results) {
-        const words   = r.title.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/).filter(Boolean);
-        const concept = words.slice(0, 2).join(" ") || query;
-        const parent  = neurons[Math.floor(Math.random() * Math.min(neurons.length, 8))];
-        grow(concept, parent, { url: r.url, snippet: r.snippet, source: query }).activate();
-        learningProgress = Math.min(100, learningProgress + 1.5);
-      }
-      log(`Learned ${results.length} concepts from "${results[0].title.slice(0, 35)}"`);
-      syncUI();
     }
 
     function render() {
@@ -1104,41 +1002,6 @@
     }
 
     // ── Learning controls ────────────────────────────────
-    // Graduated curriculum: greetings → personal → concepts → reasoning → abstract.
-    // These are factual DDG-searchable topics that build SPORE's conversational
-    // language foundation from the ground up.
-    const GENERAL_QUERIES = [
-      // Level 1 — greetings, identity, basic courtesy
-      "greeting phrases hello goodbye meaning origin",
-      "how are you wellbeing phrases social meaning",
-      "introducing yourself name identity phrases",
-      "thank you please courtesy polite language",
-      "yes no agreement disagreement language basics",
-      // Level 2 — feelings, family, everyday life
-      "feelings emotions happy sad vocabulary meaning",
-      "family members relationships vocabulary",
-      "food drink names common everyday vocabulary",
-      "colors shapes adjective descriptive words",
-      "daily routine morning evening activities language",
-      // Level 3 — knowledge and concepts
-      "weather seasons climate description language",
-      "time date past present future tense language",
-      "animals nature environment vocabulary",
-      "numbers mathematics counting language",
-      "places travel directions location vocabulary",
-      // Level 4 — opinions, reasoning, comparison
-      "expressing opinion preference like dislike language",
-      "cause effect because therefore reasoning words",
-      "compare contrast difference similarity language",
-      "problem solution asking help language phrases",
-      "possibility probability maybe perhaps language",
-      // Level 5 — abstract and complex
-      "abstract concepts ideas beliefs language",
-      "metaphor analogy figurative language examples",
-      "argumentation persuasion logic language patterns",
-      "ethics morality right wrong human concepts",
-      "knowledge learning understanding intelligence concepts",
-    ];
 
     document.getElementById("general").onclick = async () => {
       if (isLearning) return;
@@ -1155,33 +1018,15 @@
         runNextCycle();
       }
 
-      // Supplemental: static general queries feed the knowledge graph in parallel.
-      for (const q of GENERAL_QUERIES) {
-        if (!isLearning) break;
-        try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
-      }
-      log("General queries complete — AI training continues");
     };
 
-    document.getElementById("specialize").onclick = async () => {
+    document.getElementById("specialize").onclick = () => {
       const topic = document.getElementById("topic").value.trim();
       if (!topic) return alert("Please enter a topic first");
-      if (isLearning) return;
-      isLearning = true;
       document.getElementById("phase").textContent = `Topic: ${topic}`;
       grow(topic, neurons[0]).activate();
-      log(`Specializing in: ${topic}`);
-      const queries = [
-        `${topic} fundamentals basics`,
-        `${topic} advanced concepts`,
-        `${topic} examples applications`,
-      ];
-      for (const q of queries) {
-        if (!isLearning) break;
-        try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
-      }
-      log(`Specialization in "${topic}" complete`);
-      isLearning = false;
+      log(`Topic "${topic}" seeded — distillation will deepen it`);
+      syncUI();
     };
 
     document.getElementById("pause").onclick = () => {
@@ -1406,23 +1251,6 @@
 
     document.getElementById("test-ai").onclick = testAiDirect;
 
-    document.getElementById("test-search").onclick = async () => {
-      const statusEl = document.getElementById("diag-status");
-      statusEl.textContent = "Testing DuckDuckGo…";
-      try {
-        const results = await ddgSearch("language learning");
-        if (results.length) {
-          statusEl.innerHTML = `✅ <strong>Search:</strong> DuckDuckGo OK — ${results.length} results`;
-          log(`✅ Search: DDG connected — "${results[0].title.slice(0, 40)}"`, "ok");
-        } else {
-          statusEl.innerHTML = `⚠ <strong>Search:</strong> DuckDuckGo returned no results`;
-          log("⚠ Search: DDG returned 0 results", "err");
-        }
-      } catch (err) {
-        statusEl.innerHTML = `❌ <strong>Search:</strong> ${err.message}`;
-        log(`❌ Search: ${err.message}`, "err");
-      }
-    };
 
     // ── Collapse toggle ───────────────────────────────────
     document.getElementById("ai-collapse-btn").onclick = () => {
@@ -1487,7 +1315,7 @@
     //   The AI is NEVER called to generate a chat reply.
     // ══════════════════════════════════════════════════════
 
-    let chatEmerged  = false;
+    const chatEmerged = true; // chat is always open
     const chatLog    = [];   // { role: "user"|"spore", text, time }
 
     function renderChat() {
@@ -1528,22 +1356,6 @@
       tab.querySelector(".tab-arrow").textContent = collapsing ? "↑" : "↓";
     };
 
-    // ── emergeChat — called once when SPORE reaches readiness ─
-    function emergeChat(avgScore, cycles) {
-      if (chatEmerged) return;
-      chatEmerged = true;
-      const panel  = document.getElementById("chat-panel");
-      const chatTabEl = document.getElementById("chat-tab");
-      panel.classList.add("emerged");
-      chatTabEl.classList.add("tab-visible");
-      chatAppend("spore",
-        `I am ready to communicate. My knowledge bank now contains ${
-          neurons.filter(n => n.type === "permanent" && n.snippet).length
-        } learned entries across ${cycles} training cycles (avg score ${avgScore.toFixed(2)}). Ask me anything.`
-      );
-      log(`SPORE chat unlocked — readiness achieved (avg ${avgScore.toFixed(2)}, ${cycles} cycles)`, "ok");
-    }
-
     // ── Chat send — SPORE answers with knowledge bank only, no AI ─
     function chatSend() {
       const input = document.getElementById("chat-input");
@@ -1569,7 +1381,6 @@
     // ══════════════════════════════════════════════════════
 
     let isTraining      = false;
-    let distillationMode = false;   // false = standard (web search), true = closed-loop AI distillation
     // Persistent log of every question asked in distillation mode —
     // injected into the generation prompt so the AI never repeats one.
     const DISTILL_Q_KEY = "spore-distill-questions-v1";
@@ -1637,13 +1448,9 @@
         persistTrainingState();
         log(`🎓 Level up → ${currentLevel} (${levelName(currentLevel)}): ${decision.reason}`, "ok");
         tsStatus(`🎓 Advancing to Level ${currentLevel} — ${levelName(currentLevel)}`);
-        saveBrain();
+        saveIndex();
       } else {
         log(`📚 Staying at Level ${currentLevel}: ${decision.reason}`, "warn");
-        if (decision.needsMore) {
-          log(`📖 Reinforcing: "${decision.needsMore}"`);
-          learnFromQuery(decision.needsMore).catch(() => {});
-        }
       }
     }
 
@@ -1918,174 +1725,9 @@
       saveIndex(); // update synapse graph
     }
 
-    // ── Main training cycle ───────────────────────────────
-    async function runTrainingCycle() {
-      const cfg = getAiConfigFromForm();
-      if (!cfg.api_key || !cfg.model_id) {
-        tsStatus("⚠ Configure AI model first");
-        isTraining = false;
-        isLearning = false;
-        const badge = document.getElementById("ts-live-badge");
-        badge.textContent = "● idle"; badge.style.opacity = "0.6";
-        return;
-      }
-
-      clearCtxPool();
-      ["ts-q-block","ts-ctx-block","ts-resp-block","ts-assess-block"]
-        .forEach(id => { document.getElementById(id).style.display = "none"; });
-
-      try {
-        // ── 1. AI generates a question at the current curriculum level ──
-        tsStatus(`🤔 Generating Level ${currentLevel} question…`);
-        levelIter++;
-        let question = await aiCall([
-          { role: "system", content: `You are a curriculum designer for SPORE, an AI learning natural language from scratch. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.` },
-          { role: "user",   content: "Generate the next training question." },
-        ], 120);
-        if (!question) throw new Error("AI returned empty question — check model config");
-        document.getElementById("ts-question").textContent = question;
-        tsShowBlock("ts-q-block");
-
-        // ── 2. AI generates a search query ─────────────────
-        tsStatus("🔎 Generating search query…");
-        let searchQ = await aiCall([
-          { role: "system", content: "Convert the following question into a concise, specific web search query of 3-5 keywords likely to return encyclopedia or reference results. Return only the query string, no punctuation." },
-          { role: "user",   content: question },
-        ], 40);
-        if (!searchQ) searchQ = question.split(/\s+/).slice(0, 5).join(" ");
-
-        // ── 3. DDG search → context neurons (amber) ────────
-        tsStatus(`🌐 Searching: "${searchQ}"…`);
-        let results = await ddgSearch(searchQ);
-        // Retry with first 3 words of question if initial query yields nothing
-        if (!results.length && searchQ !== question) {
-          const fallbackQ = question.split(/\s+/).slice(0, 3).join(" ");
-          tsStatus(`🌐 No results — retrying: "${fallbackQ}"…`);
-          log(`⚠ No DDG results for "${searchQ}" — retrying with "${fallbackQ}"`, "warn");
-          results = await ddgSearch(fallbackQ);
-        }
-        const top = results.slice(0, 3);
-        if (!top.length) throw new Error("DuckDuckGo returned no results");
-
-        const ctxHtml = top.map(r => `<div class="ts-source">• ${r.title.slice(0, 52)}</div>`).join("");
-        document.getElementById("ts-context").innerHTML = ctxHtml;
-        tsShowBlock("ts-ctx-block");
-
-        top.forEach(r => {
-          const words   = r.title.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/).filter(Boolean);
-          const concept = "[CTX] " + (words.slice(0, 2).join(" ") || searchQ);
-          const parent  = neurons[Math.floor(Math.random() * Math.min(neurons.length, 6))];
-          const n       = grow(concept, parent, { url: r.url, snippet: r.snippet, source: searchQ });
-          n.type = "context";
-          ctxPool.push(n);
-          n.activate();
-        });
-        syncUI();
-
-        // ── 4. SPORE synthesizes — ISOLATION ENFORCED ──────
-        tsStatus("🧠 SPORE synthesizing…");
-        const sporeReply = sporeRespond(question, ctxPool);
-        document.getElementById("ts-response").textContent = sporeReply;
-        tsShowBlock("ts-resp-block");
-
-        // ── 5. AI assesses — may NOT answer for SPORE ──────
-        tsStatus("⚖ Assessing SPORE's response…");
-        const ctxSummary   = top.map(r => r.snippet.slice(0, 100)).join(" | ") || "(no context)";
-        const assessContent = `Question: ${question}\nContext available to SPORE: ${ctxSummary}\nSPORE's response: ${sporeReply || "(no response)"}`;
-        const rawResult  = await aiCall([
-          {
-            role: "system",
-            content: `You are evaluating SPORE's response. SPORE is a retrieval-only system — it assembles answers from knowledge fragments, it cannot generate new language.
-
-STRICT RULES:
-1. Do NOT answer the question yourself.
-2. Do NOT suggest what the correct answer should be.
-3. Only judge: is SPORE's response on-topic and coherent?
-
-A response is GOOD if it references relevant domain knowledge, even imperfectly.
-A response is POOR only if it is completely off-topic or says it has no knowledge.
-
-Reply ONLY with this JSON (no other text):
-{"good": true, "score": 0.75, "feedback": "one brief sentence"}`,
-          },
-          { role: "user", content: assessContent },
-        ], 80);
-
-        let result = { good: false, score: 0, feedback: "Could not parse assessment" };
-        try { const m = rawResult.match(/\{[\s\S]*?\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
-
-        tsCycles++;
-        tsScores.push(result.score);
-        if (tsScores.length > 20) tsScores.shift();
-        const avg      = tsScores.reduce((a, b) => a + b, 0) / tsScores.length;
-        const readiness = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
-
-        document.getElementById("ts-cycles").textContent    = tsCycles;
-        document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
-        document.getElementById("ts-readiness").textContent = readiness;
-        persistTrainingState();
-
-        // ── Emergence trigger ──────────────────────────────
-        // AI has determined (through sustained high scores) that
-        // SPORE is ready. Chat interface unlocks automatically.
-        if (!chatEmerged && avg >= 0.75 && tsCycles >= 5) {
-          emergeChat(avg, tsCycles);
-        }
-
-        // ── 6. Commit or discard ───────────────────────────
-        const badge = result.good
-          ? `<span class="ts-badge good">✅ Good — ${result.score.toFixed(2)}</span>`
-          : `<span class="ts-badge poor">❌ Poor — ${result.score.toFixed(2)}</span>`;
-        document.getElementById("ts-assessment").innerHTML =
-          `${badge}<div style="margin-top:6px;color:#8deaff;font-size:11px">${result.feedback}</div>`;
-        tsShowBlock("ts-assess-block");
-
-        // Track Q&A history for the AI level evaluator
-        levelHistory.push({ q: question, a: sporeReply, score: result.score });
-        if (levelHistory.length > 8) levelHistory.shift();
-
-        if (result.good) {
-          levelPasses++;
-          commitCtxPool();
-          tsCommits++;
-          document.getElementById("ts-commits").textContent = tsCommits;
-          tsStatus(`✅ Cycle ${tsCycles} — committed (Level ${currentLevel})`);
-          log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)}, level ${currentLevel})`, "ok");
-          // node files + index already saved inside commitCtxPool()
-          // Let the AI decide if SPORE has earned a level-up
-          await checkLevelAdvancement();
-        } else {
-          clearCtxPool();
-          tsStatus(`❌ Cycle ${tsCycles} — knowledge discarded`);
-          log(`Training cycle ${tsCycles}: rejected — ${result.feedback}`, "err");
-        }
-        await checkNeuralReorganization();
-        syncUI();
-
-      } catch (err) {
-        tsStatus(`❌ Error: ${err.message}`);
-        log(`Training error: ${err.message}`, "err");
-        clearCtxPool();
-      }
-
-      // Every 20 cycles — pause and spread nodes for readability
-      await afterCycle();
-
-      // Schedule next cycle — rate limiters (DDG 4.3s, AI 3.4s) handle pacing.
-      if (isTraining) {
-        await new Promise(r => setTimeout(r, 1000));
-        if (isTraining) runNextCycle();
-      } else {
-        const badge = document.getElementById("ts-live-badge");
-        badge.textContent = "● idle"; badge.style.opacity = "0.6";
-      }
-    }
-
-
-    // ── Cycle dispatcher — routes to correct mode ─────────
+    // ── Cycle dispatcher ──────────────────────────────────
     function runNextCycle() {
-      if (distillationMode) runDistillationCycle();
-      else runTrainingCycle();
+      runDistillationCycle();
     }
 
     // ══════════════════════════════════════════════════════
@@ -2245,8 +1887,6 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
         document.getElementById("ts-readiness").textContent = readiness;
         persistTrainingState();
-
-        if (!chatEmerged && avg >= 0.75 && tsCycles >= 5) emergeChat(avg, tsCycles);
 
         const badge2 = result.good
           ? `<span class="ts-badge good">✅ Good — ${result.score.toFixed(2)}</span>`
@@ -2504,43 +2144,6 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       });
     }
 
-    // ── Brain Storage (File System Access API) ───────────
-    let brainDirHandle = null;
-
-    function updateFolderUI(name) {
-      document.getElementById("folder-path").textContent = `📁 ${name}`;
-      document.getElementById("save-brain").disabled = false;
-      document.getElementById("load-brain").disabled = false;
-      document.getElementById("reconnect-folder").style.display = "none";
-    }
-
-    document.getElementById("choose-folder").onclick = async () => {
-      if (!window.showDirectoryPicker) {
-        log("File System Access API not supported in this browser", "err"); return;
-      }
-      try {
-        brainDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-        await idbSet("brainFolder", brainDirHandle);
-        updateFolderUI(brainDirHandle.name);
-        log(`Brain folder set: ${brainDirHandle.name}`, "ok");
-      } catch (err) {
-        if (err.name !== "AbortError") log(`Folder error: ${err.message}`, "err");
-      }
-    };
-
-    document.getElementById("reconnect-folder").onclick = async () => {
-      if (!brainDirHandle) return;
-      try {
-        const perm = await brainDirHandle.requestPermission({ mode: "readwrite" });
-        if (perm === "granted") {
-          updateFolderUI(brainDirHandle.name);
-          await loadBrain();
-          log(`Reconnected to ${brainDirHandle.name}`, "ok");
-        }
-      } catch (err) { log(`Reconnect error: ${err.message}`, "err"); }
-    };
-
-    // ── Write a single node file: nodes/{id}.json ─────────
     function fbStatus(msg, type = "") {
       const el = document.getElementById("fb-sync-status");
       if (!el) return;
@@ -2548,28 +2151,7 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       el.style.color = type === "err" ? "#ff6b6b" : type === "ok" ? "#00ff88" : "#8deaff";
     }
 
-    async function saveNodeFile(n) {
-      // ── Local filesystem ────────────────────────────────
-      if (brainDirHandle) {
-        try {
-          const nodesDir = await brainDirHandle.getDirectoryHandle("nodes", { create: true });
-          const fh       = await nodesDir.getFileHandle(`${n.id}.json`, { create: true });
-          const writable = await fh.createWritable();
-          await writable.write(JSON.stringify({
-            id:             n.id,
-            concept:        n.concept,
-            x:              Math.round(n.x),
-            y:              Math.round(n.y),
-            layer:          n.layer,
-            source:         n.source,
-            createdAt:      n.createdAt,
-            knowledgeCount: n.knowledgeCount || 0,
-            snippets:       n.snippets || [],
-          }, null, 2));
-          await writable.close();
-        } catch (err) { log(`Node save error (${n.id}): ${err.message}`, "err"); }
-      }
-      // ── Firebase (fire-and-forget) ──────────────────────
+    function saveNodeFile(n) {
       if (window._fb?.saveNode) {
         window._fb.saveNode(n).then(r => {
           if (!r.ok) log(`Firebase node sync error (${n.id}): ${r.error}`, "err");
@@ -2577,8 +2159,8 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       }
     }
 
-    // ── Write the graph index: spore-index.json ───────────
-    async function saveIndex() {
+    // ── Write the graph index to Firebase ─────────────────
+    function saveIndex() {
       const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
       const idMap     = new Map(permanent.map(n => [n, n.id]));
       const data = {
@@ -2590,18 +2172,6 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
           .filter(s => idMap.has(s.a) && idMap.has(s.b))
           .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
       };
-
-      // ── Local filesystem ────────────────────────────────
-      if (brainDirHandle) {
-        try {
-          const fh       = await brainDirHandle.getFileHandle("spore-index.json", { create: true });
-          const writable = await fh.createWritable();
-          await writable.write(JSON.stringify(data, null, 2));
-          await writable.close();
-        } catch (err) { log(`Index save error: ${err.message}`, "err"); }
-      }
-
-      // ── Firebase (fire-and-forget) ──────────────────────
       if (window._fb?.saveIndex) {
         window._fb.saveIndex(data).then(r => {
           if (r.ok) fbStatus(`☁ Synced ${permanent.length} nodes — ${new Date().toLocaleTimeString()}`, "ok");
@@ -2609,74 +2179,6 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         });
       }
     }
-
-    // ── Full save: every node file + index ────────────────
-    async function saveBrain() {
-      if (!brainDirHandle) return;
-      const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
-      await Promise.all(permanent.map(saveNodeFile));
-      await saveIndex();
-      log(`Brain saved — ${permanent.length} node files + index (level ${currentLevel})`, "ok");
-    }
-
-    // ── Load brain from node files + index ────────────────
-    async function loadBrain() {
-      if (!brainDirHandle) return;
-      try {
-        const idxFh  = await brainDirHandle.getFileHandle("spore-index.json");
-        const index  = JSON.parse(await (await idxFh.getFile()).text());
-        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes");
-
-        // Read every node file listed in the index
-        const nodeMap = new Map(); // id → Neuron
-        await Promise.all((index.neurons || []).map(async id => {
-          try {
-            const fh   = await nodesDir.getFileHandle(`${id}.json`);
-            const data = JSON.parse(await (await fh.getFile()).text());
-            const n    = new Neuron(data.concept, data.x, data.y, data.layer,
-              { id: data.id, url: data.snippets?.[0]?.url || null,
-                snippet: data.snippets?.[0]?.text || null, source: data.source });
-            n.type           = "permanent";
-            n.id             = data.id;
-            n.knowledgeCount = data.knowledgeCount || 0;
-            n.snippets       = data.snippets || [];
-            n.createdAt      = data.createdAt || n.createdAt;
-            nodeMap.set(id, n);
-          } catch (e) {
-            // Node file missing — create a dead placeholder so it fades properly
-            if (e.name === "NotFoundError") log(`⚠ Missing node file: ${id}.json`, "warn");
-          }
-        }));
-
-        neurons.length  = 0;
-        synapses.length = 0;
-        nodeMap.forEach(n => neurons.push(n));
-
-        (index.synapses || []).forEach(s => {
-          const a = nodeMap.get(s.a), b = nodeMap.get(s.b);
-          if (a && b) {
-            const syn = new Synapse(a, b);
-            syn.strength = s.strength ?? 0.08;
-            synapses.push(syn);
-          }
-        });
-
-        if (index.currentLevel) { currentLevel = index.currentLevel; levelIter = index.levelIter || 0; levelPasses = index.levelPasses || 0; }
-        updateLevelDisplay();
-        syncUI();
-        // Train ML model on the loaded knowledge bank
-        const tok = sporeML.train();
-        const mlEl = document.getElementById("ts-ml-corpus");
-        if (mlEl) mlEl.textContent = tok > 0 ? tok + " tok / " + sporeML.vocabSize + " vocab" : "—";
-        log(`Brain loaded — ${neurons.length} nodes (level ${currentLevel}, ML corpus: ${tok} tokens)`, "ok");
-      } catch (err) {
-        if (err.name === "NotFoundError") log("No saved brain found — starting fresh", "warn");
-        else log(`Load error: ${err.message}`, "err");
-      }
-    }
-
-    document.getElementById("save-brain").onclick = saveBrain;
-    document.getElementById("load-brain").onclick  = loadBrain;
 
     // ── Firebase brain load ───────────────────────────────
     async function loadBrainFromFirebase() {
@@ -2760,46 +2262,9 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
     document.getElementById("fb-save-brain").onclick = saveBrainToFirebase;
     document.getElementById("fb-load-brain").onclick  = loadBrainFromFirebase;
 
-    // ── Dead-node detection: scan nodes/ dir every 30 s ───
-    // Any node file that has been deleted from disk dies in the visualizer.
-    setInterval(async () => {
-      if (!brainDirHandle) return;
-      try {
-        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes");
-        const living   = neurons.filter(n => n.type === "permanent" && !n.dead);
-        await Promise.all(living.map(async n => {
-          try { await nodesDir.getFileHandle(`${n.id}.json`); }
-          catch (e) {
-            if (e.name === "NotFoundError") {
-              log(`💀 Node deleted: ${n.concept} (${n.id}.json)`, "err");
-              n.dead = true;
-              synapses.forEach(s => { if (s.a === n || s.b === n) s.dead = true; });
-              await saveIndex(); // update index to remove the dead node
-            }
-          }
-        }));
-      } catch (_) {}
-    }, 30000);
-
-    // ── Auto-restore folder handle from previous session ──
+    // ── Auto-load brain from Firebase on startup ──────────
     async function tryAutoLoad() {
-      const handle = await idbGet("brainFolder").catch(() => null);
-      if (!handle) return;
-      brainDirHandle = handle;
-      try {
-        const perm = await handle.queryPermission({ mode: "readwrite" });
-        if (perm === "granted") {
-          updateFolderUI(handle.name);
-          await loadBrain();
-        } else {
-          // Permission needs a user gesture — show reconnect button
-          document.getElementById("folder-path").textContent = `📁 ${handle.name} — click 🔓 to reconnect`;
-          document.getElementById("reconnect-folder").style.display = "";
-        }
-      } catch (_) {
-        log("Previous brain folder no longer accessible", "warn");
-        brainDirHandle = null;
-      }
+      if (window._fb?.loadBrain) await loadBrainFromFirebase();
     }
 
     // ── Canvas control buttons ────────────────────────────
@@ -2818,23 +2283,6 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       this.classList.toggle("active", brainHidden);
       this.title = brainHidden ? "Show the neural canvas" : "Hide the neural canvas to free up GPU/CPU";
       log(brainHidden ? "Brain hidden — canvas rendering paused" : "Brain visible");
-    };
-
-    // ── Training mode toggle ──────────────────────────────
-    document.getElementById("ts-mode-standard").onclick = () => {
-      distillationMode = false;
-      document.getElementById("ts-mode-standard").classList.add("active");
-      document.getElementById("ts-mode-distill").classList.remove("active");
-      document.getElementById("ts-mode-hint").textContent = "Web search → SPORE";
-      log("Mode: Standard (web search)");
-    };
-
-    document.getElementById("ts-mode-distill").onclick = () => {
-      distillationMode = true;
-      document.getElementById("ts-mode-distill").classList.add("active");
-      document.getElementById("ts-mode-standard").classList.remove("active");
-      document.getElementById("ts-mode-hint").textContent = "AI generates fragments → SPORE (no search)";
-      log("Mode: Distillation (closed-loop)");
     };
 
     // ── Training state persistence ────────────────────────
@@ -2889,54 +2337,32 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       tsStatus("↺ Reset — ready to start fresh");
     };
 
-    // ── Simple Visualizer ────────────────────────────────
-    const MAX_SV_CARDS = 80;
-
+    // ── Simple Visualizer — 2D growing neuron dot grid ───
     function refreshSimpleView() {
       if (vizMode !== "simple") return;
       const now = Date.now();
-      const visible_neurons = neurons.filter(n => !n.dead);
+      const visible = neurons.filter(n => !n.dead);
 
-      // Sort: recently activated first, then most knowledge
-      const sorted = [...visible_neurons].sort((a, b) => {
-        const aAct = now - (a._lastActivated || 0) < 1500 ? 1 : 0;
-        const bAct = now - (b._lastActivated || 0) < 1500 ? 1 : 0;
-        if (bAct !== aAct) return bAct - aAct;
-        return (b.knowledgeCount || 0) - (a.knowledgeCount || 0);
-      });
+      // Order: permanent by creation time, then context/dst on top
+      const sorted = [...visible].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
 
-      const shown    = sorted.slice(0, MAX_SV_CARDS);
-      const overflow = sorted.length - shown.length;
-
-      // Connection count per node
-      const connMap = {};
-      synapses.forEach(s => {
-        if (!s.dead) {
-          connMap[s.a.id] = (connMap[s.a.id] || 0) + 1;
-          connMap[s.b.id] = (connMap[s.b.id] || 0) + 1;
-        }
-      });
-
-      document.getElementById("sv-grid").innerHTML = shown.map(n => {
-        const isActive = now - (n._lastActivated || 0) < 1500;
-        const isCtx    = n.type === "context";
-        const conns    = connMap[n.id] || 0;
-        const kc       = n.knowledgeCount || 0;
-        const barW     = Math.min(100, kc * 7);
-        const cls      = `sv-card${isCtx ? " sv-ctx" : ""}${isActive ? " sv-active" : ""}`;
-        return `<div class="${cls}">
-          <div class="sv-concept">${n.concept.slice(0, 18)}</div>
-          <div class="sv-meta">L${n.layer} · ${conns} links · ${kc} snip</div>
-          <div class="sv-bar"><div class="sv-bar-fill" style="width:${barW}%"></div></div>
-        </div>`;
+      document.getElementById("sv-grid").innerHTML = sorted.map(n => {
+        const age      = now - (n._lastActivated || 0);
+        const isActive = age < 1500;
+        const isDst    = n.source === "distillation";
+        const kc       = Math.min(n.knowledgeCount || 0, 12);
+        // Opacity: 0.15 (fresh/empty) → 0.9 (knowledge-rich)
+        const opacity  = (0.15 + (kc / 12) * 0.75).toFixed(2);
+        const cls      = `sv-dot${isDst ? " sv-dst" : ""}${isActive ? " sv-active" : ""}`;
+        const label    = n.concept.replace(/^\[DST\] |\[CTX\] /g, "").slice(0, 28);
+        return `<div class="${cls}" style="opacity:${opacity}" title="${label}"></div>`;
       }).join("");
 
-      document.getElementById("sv-overflow").textContent =
-        overflow > 0 ? `…and ${overflow} more neurons` : "";
-      document.getElementById("sv-neuron-ct").textContent  = `${visible_neurons.length} neurons`;
+      document.getElementById("sv-neuron-ct").textContent  = `${visible.length} neurons`;
       document.getElementById("sv-synapse-ct").textContent = `${synapses.filter(s=>!s.dead).length} synapses`;
       document.getElementById("sv-phase-txt").textContent  = document.getElementById("phase").textContent;
       document.getElementById("sv-live-dot").style.display = isTraining ? "" : "none";
+      document.getElementById("sv-overflow").textContent   = "";
     }
 
     function applyVizMode() {
@@ -2981,10 +2407,9 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
     applyVizMode();           // apply simple/complex before first render
     restoreTrainingState();   // restore before updateLevelDisplay so level is correct
     updateLevelDisplay();
-    // Chat is always present — mark emerged so the panel and tab are active
+    // Chat is always present
     document.getElementById("chat-panel").classList.add("emerged");
     document.getElementById("chat-tab").classList.add("tab-visible");
-    chatEmerged = true;
     tryAutoLoad();
   </script>
 </body>
