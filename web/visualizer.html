@@ -216,7 +216,10 @@
     #neuron-panel h4 { font-size: 14px; margin-bottom: 10px; color: #00f2ff; word-break: break-word; }
     .np-row { display: flex; justify-content: space-between; margin-top: 5px; color: #8deaff; }
     .np-row span:last-child { color: #fff; }
-    #np-snippet { margin-top: 10px; color: #8deaff; line-height: 1.5; max-height: 80px; overflow-y: auto; }
+    #np-snippet { margin-top: 10px; color: #8deaff; line-height: 1.5; max-height: 160px; overflow-y: auto; }
+    #np-snippet .np-entry { border-top: 1px solid rgba(0,242,255,0.12); padding: 6px 0; font-size: 11px; }
+    #np-snippet .np-entry:first-child { border-top: none; }
+    #np-snippet .np-entry a { color: #00f2ff; font-size: 10px; word-break: break-all; }
     #np-url { display: block; margin-top: 10px; color: #00f2ff; word-break: break-all; text-decoration: underline; }
     #np-close { float: right; cursor: pointer; opacity: .6; font-size: 14px; margin: -4px -4px 0 0; }
     #np-close:hover { opacity: 1; }
@@ -365,10 +368,9 @@
     <h4 id="np-concept"></h4>
     <div class="np-row"><span>Layer</span><span id="np-layer"></span></div>
     <div class="np-row"><span>Connections</span><span id="np-connections"></span></div>
-    <div class="np-row"><span>Source</span><span id="np-source"></span></div>
-    <div class="np-row"><span>Created</span><span id="np-time"></span></div>
+    <div class="np-row"><span>Knowledge depth</span><span id="np-knowledge"></span></div>
+    <div class="np-row"><span>First seen</span><span id="np-time"></span></div>
     <div id="np-snippet"></div>
-    <a id="np-url" href="#" target="_blank" rel="noopener"></a>
   </div>
 
   <!-- ─────────────────────────────────────────────────── -->
@@ -506,6 +508,8 @@
         this.url            = data.url     || null;
         this.snippet        = data.snippet || null;
         this.source         = data.source  || "core";
+        // All snippets accumulated over time (url + text pairs)
+        this.snippets       = data.snippet ? [{ url: data.url, text: data.snippet, source: data.source || "core" }] : [];
         this.createdAt      = new Date().toLocaleTimeString();
         this.type           = "permanent"; // "permanent" | "context"
         this.knowledgeCount = 0;           // increments each time a snippet is committed
@@ -696,21 +700,27 @@
 
     // ── Neuron inspection panel ──────────────────────────
     function showNeuronPanel(n) {
-      const conns = synapses.filter(s => s.a === n || s.b === n).length;
+      const conns  = synapses.filter(s => s.a === n || s.b === n).length;
+      const depth  = n.knowledgeCount || 0;
       document.getElementById("np-concept").textContent     = n.concept;
       document.getElementById("np-layer").textContent       = n.layer;
       document.getElementById("np-connections").textContent = conns;
-      document.getElementById("np-source").textContent      = n.source;
+      document.getElementById("np-knowledge").textContent   = depth === 0 ? "new node" : `${depth} snippet${depth !== 1 ? "s" : ""}`;
       document.getElementById("np-time").textContent        = n.createdAt;
-      document.getElementById("np-snippet").textContent     = n.snippet || "No description available.";
-      const link = document.getElementById("np-url");
-      if (n.url) {
-        link.href        = n.url;
-        link.textContent = n.url.length > 55 ? n.url.slice(0, 55) + "…" : n.url;
-        link.style.display = "block";
+
+      // Show all accumulated snippets, newest first
+      const snippetEl = document.getElementById("np-snippet");
+      const list = n.snippets && n.snippets.length ? [...n.snippets].reverse() : (n.snippet ? [{ url: n.url, text: n.snippet, source: n.source }] : []);
+      if (list.length) {
+        snippetEl.innerHTML = list.map(s => `
+          <div class="np-entry">
+            <div>${s.text || "(no description)"}</div>
+            ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener">${s.url.slice(0, 60)}${s.url.length > 60 ? "…" : ""}</a>` : ""}
+          </div>`).join("");
       } else {
-        link.style.display = "none";
+        snippetEl.innerHTML = `<div class="np-entry" style="color:#4a8a9a">No knowledge stored yet — node is still forming</div>`;
       }
+
       n.activate();
       document.getElementById("neuron-panel").classList.add("visible");
     }
@@ -1473,8 +1483,12 @@
       ctxPool.forEach(n => {
         n.type = "permanent";
         n.knowledgeCount++;
+        // Accumulate this snippet into the node's knowledge store
+        if (n.snippet && !n.snippets.some(s => s.url === n.url)) {
+          n.snippets.push({ url: n.url, text: n.snippet, source: n.source || "" });
+          if (n.snippets.length > 12) n.snippets.shift(); // cap at 12 per node
+        }
         n.activate();
-        // Every committed snippet strengthens the synapses touching this neuron
         synapses.forEach(s => { if (s.a === n || s.b === n) s.transmit(); });
       });
       ctxPool = [];
@@ -1710,6 +1724,7 @@ Reply ONLY with this JSON (no other text):
             concept: n.concept, x: n.x, y: n.y, layer: n.layer,
             url: n.url, snippet: n.snippet, source: n.source,
             knowledgeCount: n.knowledgeCount || 0,
+            snippets: n.snippets || [],
           })),
           synapses: synapses
             .filter(s => neuronIndex.has(s.a) && neuronIndex.has(s.b))
@@ -1736,6 +1751,7 @@ Reply ONLY with this JSON (no other text):
             { url: n.url, snippet: n.snippet, source: n.source });
           node.type           = "permanent";
           node.knowledgeCount = n.knowledgeCount || 0;
+          node.snippets       = n.snippets || (n.snippet ? [{ url: n.url, text: n.snippet, source: n.source }] : []);
           neurons.push(node);
         });
         (data.synapses || []).forEach(s => {
