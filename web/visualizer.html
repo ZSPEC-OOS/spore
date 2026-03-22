@@ -1420,6 +1420,15 @@
 
     let isTraining      = false;
     let distillationMode = false;   // false = standard (web search), true = closed-loop AI distillation
+    // Persistent log of every question asked in distillation mode —
+    // injected into the generation prompt so the AI never repeats one.
+    const DISTILL_Q_KEY = "spore-distill-questions-v1";
+    const distillAskedQuestions = new Set(
+      JSON.parse(localStorage.getItem(DISTILL_Q_KEY) || "[]")
+    );
+    function saveDistillQuestions() {
+      localStorage.setItem(DISTILL_Q_KEY, JSON.stringify([...distillAskedQuestions]));
+    }
     let animPaused      = false;    // freeze visual animation (nodes/synapses stop moving)
     let brainHidden     = false;    // hide canvas entirely for performance
     let tsCycles        = 0;
@@ -1936,14 +1945,40 @@ Reply ONLY with this JSON (no other text):
         .forEach(id => { document.getElementById(id).style.display = "none"; });
 
       try {
-        // ── 1. AI generates a question ──────────────────────
+        // ── 1. AI generates a unique question ───────────────
         tsStatus(`⚗ [Distill] Level ${currentLevel} question…`);
         levelIter++;
+
+        // Build a compact list of previously asked questions to avoid
+        const prevList = [...distillAskedQuestions];
+        const avoidBlock = prevList.length
+          ? `\n\nYou have already asked these questions — do NOT repeat or closely paraphrase any of them:\n${prevList.slice(-80).map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+          : "";
+
         let question = await aiCall([
-          { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.` },
+          { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
           { role: "user",   content: "Generate the next training question." },
         ], 60);
         if (!question) throw new Error("AI returned empty question — check model config");
+
+        // Normalise for dedup check (lowercase, strip punctuation)
+        const normalise = q => q.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+        const normQ = normalise(question);
+
+        // If it's a near-duplicate, ask once more with an explicit nudge
+        if ([...distillAskedQuestions].some(q => normalise(q) === normQ)) {
+          tsStatus(`⚗ [Distill] Duplicate detected — regenerating…`);
+          question = await aiCall([
+            { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
+            { role: "user",   content: "The previous question was a duplicate. Generate a completely different training question on a new angle or subtopic." },
+          ], 60);
+          if (!question) throw new Error("AI returned empty question on retry");
+        }
+
+        // Record and persist
+        distillAskedQuestions.add(question.trim());
+        saveDistillQuestions();
+        log(`⚗ Distill Q #${distillAskedQuestions.size}: ${question.slice(0, 60)}${question.length > 60 ? "…" : ""}`);
         document.getElementById("ts-question").textContent = question;
         tsShowBlock("ts-q-block");
 
@@ -2557,6 +2592,8 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       currentLevel = 1;
       tsScores.length = 0;
       reorgCooldown = 0;
+      distillAskedQuestions.clear();
+      saveDistillQuestions();
       persistTrainingState();
       document.getElementById("ts-cycles").textContent    = 0;
       document.getElementById("ts-commits").textContent   = 0;
