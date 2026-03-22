@@ -96,19 +96,14 @@
     <!-- ── Firebase API Key Storage ───────────────────── -->
     <section class="section" id="firebase-section">
       <h4>🔥 Firebase Key Storage</h4>
-      <div class="row"><input id="fb-api-key" placeholder="Firebase API Key" type="password" /></div>
-      <div class="row"><input id="fb-project-id" placeholder="Firebase Project ID" /></div>
-      <div class="row"><input id="fb-app-id" placeholder="Firebase App ID" /></div>
-      <div class="row">
-        <button id="fb-connect">Connect Firebase</button>
-      </div>
       <div class="row">
         <button id="fb-push" disabled>⬆ Push Keys</button>
         <button id="fb-pull" disabled>⬇ Pull Keys</button>
       </div>
-      <div id="fb-status"><span class="status-dot disconnected"></span>Not connected</div>
+      <div id="fb-status"><span class="status-dot pending"></span>Connecting…</div>
       <p class="hint">
-        Stores AI API keys in Firestore (<code>spore_config/api_keys</code>).
+        Auto-connected to <code>spore-2d34f</code>. AI keys stored in
+        Firestore at <code>spore_config/api_keys</code>.
         SPORE's knowledge graph stays local for privacy.
       </p>
     </section>
@@ -117,56 +112,37 @@
   </aside>
 
   <!-- ─────────────────────────────────────────────────── -->
-  <!-- Firebase modular SDK (dynamic import at runtime)   -->
+  <!-- Firebase — auto-initialises with project config    -->
   <!-- ─────────────────────────────────────────────────── -->
   <script type="module">
-    // Expose a minimal Firebase helper on window so the main (non-module)
-    // script can call it after the user provides credentials.
+    const firebaseConfig = {
+      apiKey:            "AIzaSyDGKkHJQ_8pB_iFzU4ZEgyKH7obizpXDx0",
+      authDomain:        "spore-2d34f.firebaseapp.com",
+      projectId:         "spore-2d34f",
+      storageBucket:     "spore-2d34f.firebasestorage.app",
+      messagingSenderId: "1055528881727",
+      appId:             "1:1055528881727:web:caa1be326cc5c20e85728a",
+    };
+
+    const { initializeApp } = await import(
+      "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
+    );
+    const { getFirestore, doc, getDoc, setDoc } = await import(
+      "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+    );
+
+    const _app = initializeApp(firebaseConfig);
+    const _db  = getFirestore(_app);
+
     window._fb = {
-      db: null,
-      _app: null,
-
-      async connect(apiKey, projectId, appId) {
-        try {
-          const { initializeApp, getApps, deleteApp } = await import(
-            "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
-          );
-          const { getFirestore, doc, getDoc, setDoc } = await import(
-            "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
-          );
-
-          // Re-initialise if already connected with different config.
-          if (this._app) {
-            await deleteApp(this._app);
-            this._app = null;
-            this.db = null;
-          }
-
-          this._app = initializeApp(
-            { apiKey, projectId, appId, authDomain: `${projectId}.firebaseapp.com` },
-            `spore-${Date.now()}`
-          );
-          this.db = getFirestore(this._app);
-
-          // Store Firestore helpers on the instance so other methods can use them.
-          this._docFn  = doc;
-          this._getFn  = getDoc;
-          this._setFn  = setDoc;
-
-          // Quick connectivity probe — write a harmless ping document.
-          const ref = this._docFn(this.db, "spore_config", "ping");
-          await this._setFn(ref, { ts: Date.now() }, { merge: true });
-          return { ok: true };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-      },
+      db: _db,
 
       async pushKeys(aiName, aiModelId, aiBaseUrl, aiApiKey) {
-        if (!this.db) return { ok: false, error: "Not connected" };
         try {
-          const ref = this._docFn(this.db, "spore_config", "api_keys");
-          await this._setFn(ref, { aiName, aiModelId, aiBaseUrl, aiApiKey, updatedAt: Date.now() });
+          await setDoc(
+            doc(_db, "spore_config", "api_keys"),
+            { aiName, aiModelId, aiBaseUrl, aiApiKey, updatedAt: Date.now() }
+          );
           return { ok: true };
         } catch (err) {
           return { ok: false, error: err.message };
@@ -174,10 +150,8 @@
       },
 
       async pullKeys() {
-        if (!this.db) return { ok: false, error: "Not connected" };
         try {
-          const ref = this._docFn(this.db, "spore_config", "api_keys");
-          const snap = await this._getFn(ref);
+          const snap = await getDoc(doc(_db, "spore_config", "api_keys"));
           if (!snap.exists()) return { ok: true, data: null };
           return { ok: true, data: snap.data() };
         } catch (err) {
@@ -185,6 +159,9 @@
         }
       },
     };
+
+    // Signal to the main script that Firebase is ready.
+    window.dispatchEvent(new CustomEvent("firebase-ready"));
   </script>
 
   <!-- ─────────────────────────────────────────────────── -->
@@ -477,55 +454,27 @@
 
     // ── Firebase ─────────────────────────────────────────
     function setFirebaseStatus(connected, label) {
-      const el = document.getElementById("fb-status");
-      const dot = `<span class="status-dot ${connected ? "connected" : "disconnected"}"></span>`;
-      el.innerHTML = `${dot}${label}`;
+      const el  = document.getElementById("fb-status");
+      const cls = connected ? "connected" : "disconnected";
+      el.innerHTML = `<span class="status-dot ${cls}"></span>${label}`;
       document.getElementById("fb-push").disabled = !connected;
       document.getElementById("fb-pull").disabled = !connected;
     }
 
-    function loadFirebaseConfigFromStorage() {
-      const raw = localStorage.getItem("sporeFirebaseConfig");
-      if (!raw) return;
-      try {
-        const fb = JSON.parse(raw);
-        document.getElementById("fb-api-key").value    = fb.apiKey    || "";
-        document.getElementById("fb-project-id").value = fb.projectId || "";
-        document.getElementById("fb-app-id").value     = fb.appId     || "";
-      } catch (_) {}
-    }
+    // Firebase module signals readiness via a custom event.
+    window.addEventListener("firebase-ready", () => {
+      setFirebaseStatus(true, "Connected — spore-2d34f");
+      log("Firebase ready", "ok");
+    });
 
-    document.getElementById("fb-connect").onclick = async () => {
-      const apiKey    = document.getElementById("fb-api-key").value.trim();
-      const projectId = document.getElementById("fb-project-id").value.trim();
-      const appId     = document.getElementById("fb-app-id").value.trim();
-
-      if (!apiKey || !projectId || !appId) {
-        setFirebaseStatus(false, "Fill in all three Firebase fields");
-        return;
+    // If the module fails (network error, etc.) the event never fires;
+    // show a timeout error after 8 s.
+    setTimeout(() => {
+      if (!window._fb || !window._fb.db) {
+        setFirebaseStatus(false, "Failed to connect (check network)");
+        log("Firebase init timed out", "err");
       }
-
-      const dot = document.querySelector("#fb-status .status-dot");
-      if (dot) dot.className = "status-dot pending";
-      document.getElementById("fb-status").innerHTML =
-        '<span class="status-dot pending"></span>Connecting…';
-
-      // _fb is set by the module script above.
-      if (!window._fb) {
-        setFirebaseStatus(false, "Firebase SDK not loaded");
-        return;
-      }
-
-      const res = await window._fb.connect(apiKey, projectId, appId);
-      if (res.ok) {
-        localStorage.setItem("sporeFirebaseConfig", JSON.stringify({ apiKey, projectId, appId }));
-        setFirebaseStatus(true, `Connected — ${projectId}`);
-        log("Firebase connected", "ok");
-      } else {
-        setFirebaseStatus(false, `Connection failed: ${res.error}`);
-        log(`Firebase error: ${res.error}`, "err");
-      }
-    };
+    }, 8000);
 
     document.getElementById("fb-push").onclick = async () => {
       const cfg = getAiConfigFromForm();
@@ -549,8 +498,6 @@
 
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
-    loadFirebaseConfigFromStorage();
-    setFirebaseStatus(false, "Not connected");
     boot();
   </script>
 </body>
