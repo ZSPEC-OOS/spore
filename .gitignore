@@ -9,6 +9,8 @@ build/
 .venv
 venv/
 
-# Runtime-generated config (never commit API keys)
+# Runtime-generated config and state (never commit API keys or training state)
 data/config.json
 config.json
+data/nlf_state.json
+data/nlf/
