@@ -42,12 +42,12 @@
       margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25);
       padding-top: 10px;
     }
-    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; display:flex; align-items:center; justify-content:space-between; cursor:default; }
-    .section h4 .collapse-btn { cursor:pointer; font-size:10px; opacity:.6; transition:transform .2s, opacity .2s; user-select:none; }
-    .section h4 .collapse-btn:hover { opacity:1; }
-    .section h4 .collapse-btn.collapsed { transform:rotate(-90deg); }
+    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; display:flex; align-items:center; justify-content:space-between; }
+    .collapse-btn { cursor:pointer; font-size:10px; opacity:.5; transition:transform .2s,opacity .2s; user-select:none; padding:0 2px; }
+    .collapse-btn:hover { opacity:1; }
+    .collapse-btn.up { transform:rotate(180deg); }
     #ai-collapsible { overflow:hidden; transition:max-height .25s ease; max-height:1000px; }
-    #ai-collapsible.collapsed { max-height:0; }
+    #ai-collapsible.closed { max-height:0; }
     .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.4; }
     .status-dot {
       display: inline-block; width: 7px; height: 7px;
@@ -78,7 +78,7 @@
 
     <!-- ── AI Model Config ─────────────────────────────── -->
     <section class="section" id="ai-config">
-      <h4>AI Model Config (Search/Crawl) <span class="collapse-btn" id="ai-collapse-btn" title="Collapse">▼</span></h4>
+      <h4>AI Model Config (Search/Crawl) <span class="collapse-btn" id="ai-collapse-btn">▼</span></h4>
     <div id="ai-collapsible">
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
       <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2.5" /></div>
@@ -97,10 +97,10 @@
       <h4>Diagnostics</h4>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
-        <button id="test-search" class="btn-warn">🔍 Test Search</button>
+        <button id="test-search" class="btn-warn" disabled title="Requires server.py running locally">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">AI test calls your provider directly. Search test requires <code>python server.py</code>.</p>
+      <p class="hint">AI test calls your provider directly from the browser. Search test requires <code>python server.py</code> running locally.</p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -119,7 +119,7 @@
     </section>
 
       <div id="log"></div>
-    </div><!-- #ai-collapsible -->
+    </div><!-- /#ai-collapsible -->
   </aside>
 
   <!-- ─────────────────────────────────────────────────── -->
@@ -189,8 +189,11 @@
     let learningProgress = 0;
 
     // ── Backend server base URL (search test only) ───────
-    const DEFAULT_API = "http://localhost:8000";
-    const getAPI = () => DEFAULT_API;
+    // When served by server.py, use same origin to avoid CORS errors.
+    const getAPI = () =>
+      (window.location.protocol !== "file:" && window.location.hostname)
+        ? window.location.origin
+        : "http://localhost:8000";
 
     // ── AI provider presets (Find ⟳ cycles through these) ─
     const AI_PRESETS = [
@@ -576,7 +579,7 @@
 
     // ── Diagnostics ──────────────────────────────────────
 
-    // AI test — proxied through server.py to avoid browser CORS restrictions.
+    // AI test — calls the provider directly from the browser, no server needed.
     async function testAiDirect() {
       const cfg     = getAiConfigFromForm();
       const statusEl = document.getElementById("diag-status");
@@ -592,63 +595,50 @@
         return;
       }
 
-      // Normalise base URL — ensure it has a protocol so server.py can reach it.
-      let baseUrl = (cfg.base_url || "https://api.openai.com/v1").trim().replace(/\/$/, "");
-      if (!/^https?:\/\//i.test(baseUrl)) baseUrl = "https://" + baseUrl;
-
+      const baseUrl = (cfg.base_url || "https://api.openai.com/v1").replace(/\/$/, "");
       statusEl.textContent = `Testing ${baseUrl}…`;
 
       try {
-        const res = await fetch(`${getAPI()}/api/test/ai/probe`, {
+        const res = await fetch(`${baseUrl}/chat/completions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${cfg.api_key}`,
+          },
           body: JSON.stringify({
-            model_id: cfg.model_id,
-            base_url: baseUrl,
-            api_key:  cfg.api_key,
+            model: cfg.model_id,
+            messages: [
+              { role: "system", content: "You validate API connectivity." },
+              { role: "user",   content: "Reply with exactly: OK" },
+            ],
+            max_tokens: 5,
           }),
         });
 
         const data = await res.json();
-        if (data.ok) {
-          statusEl.innerHTML = `✅ <strong>AI Model:</strong> ${data.message}`;
-          log(`✅ AI: ${cfg.model_id} at ${baseUrl} — ${data.message}`, "ok");
+        if (data.error) {
+          statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${data.error.message || JSON.stringify(data.error)}`;
+          log(`❌ AI: ${data.error.message || JSON.stringify(data.error)}`, "err");
         } else {
-          statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${data.message}`;
-          log(`❌ AI: ${data.message}`, "err");
+          const reply = data.choices?.[0]?.message?.content || "(no content)";
+          statusEl.innerHTML = `✅ <strong>AI Model:</strong> Connected — "${reply}"`;
+          log(`✅ AI: ${cfg.model_id} at ${baseUrl} — "${reply}"`, "ok");
         }
       } catch (err) {
-        statusEl.innerHTML = `❌ <strong>AI Model:</strong> server.py not running at ${getAPI()}`;
-        log(`❌ AI test: server.py unreachable — ${err.message}`, "err");
+        statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${err.message}`;
+        log(`❌ AI fetch error: ${err.message}`, "err");
       }
     }
 
-    // Search test — requires server.py (uses Python duckduckgo-search lib).
-    async function testSearchViaServer() {
-      const statusEl = document.getElementById("diag-status");
-      statusEl.textContent = "Testing Search…";
-      try {
-        const res  = await fetch(`${getAPI()}/api/test/search`);
-        const data = await res.json();
-        const icon = data.ok ? "✅" : "❌";
-        statusEl.innerHTML = `${icon} <strong>Search:</strong> ${data.message}`;
-        log(`${icon} Search (${data.provider}): ${data.message}`, data.ok ? "ok" : "err");
-      } catch (err) {
-        statusEl.innerHTML = `❌ <strong>Search:</strong> server.py not running at ${getAPI()}`;
-        log(`❌ Search: server.py unreachable at ${getAPI()}`, "err");
-      }
-    }
+    document.getElementById("test-ai").onclick = testAiDirect;
 
-    document.getElementById("test-ai").onclick     = testAiDirect;
-    document.getElementById("test-search").onclick = testSearchViaServer;
-
-    // ── Collapse toggle ───────────────────────────────
+    // ── Collapse toggle ───────────────────────────────────
     document.getElementById("ai-collapse-btn").onclick = () => {
       const panel = document.getElementById("ai-collapsible");
       const btn   = document.getElementById("ai-collapse-btn");
-      const open  = !panel.classList.toggle("collapsed");
-      btn.classList.toggle("collapsed", !open);
-      btn.title = open ? "Collapse" : "Expand";
+      const closing = !panel.classList.contains("closed");
+      panel.classList.toggle("closed", closing);
+      btn.classList.toggle("up", closing);
     };
 
     // ── Firebase ─────────────────────────────────────────
