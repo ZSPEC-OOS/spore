@@ -102,14 +102,13 @@
     #training-sandbox.reorg-active { animation: reorg-pulse 0.7s ease 4; }
     /* ── Emergent Chat Interface ───────────────────────── */
     #chat-panel {
-      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(100%);
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(0);
       z-index: 10; width: 480px;
       background: rgba(10,10,26,0.95);
       border: 1px solid #00f2ff; border-bottom: none; border-radius: 12px 12px 0 0;
       padding: 0; font-family: "Courier New", monospace; font-size: 12px; color: #00f2ff;
       box-shadow: 0 -4px 32px rgba(0,242,255,0.18);
-      transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1);
-      pointer-events: none; opacity: 0;
+      pointer-events: all; opacity: 1;
       transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease;
     }
     #chat-panel.emerged {
@@ -208,7 +207,7 @@
       color: #00f2ff; border: 1px solid #00f2ff; border-bottom: none;
       border-radius: 8px 8px 0 0;
       box-shadow: 0 -3px 14px rgba(0,242,255,0.14);
-      opacity: 0; pointer-events: none;
+      opacity: 1; pointer-events: all;
       transition: opacity 0.4s ease, box-shadow 0.2s;
     }
     #chat-tab.tab-visible { opacity: 1; pointer-events: all; }
@@ -2573,6 +2572,10 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
     boot();
     restoreTrainingState();   // restore before updateLevelDisplay so level is correct
     updateLevelDisplay();
+    // Chat is always present — mark emerged so the panel and tab are active
+    document.getElementById("chat-panel").classList.add("emerged");
+    document.getElementById("chat-tab").classList.add("tab-visible");
+    chatEmerged = true;
     tryAutoLoad();
   </script>
 </body>
