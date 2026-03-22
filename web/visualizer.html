@@ -1608,59 +1608,67 @@
         return text.trim();
       }
 
-      // Full ML respond — scored retrieval + Markov synthesis
+      // Full ML respond — pure generative synthesis from knowledge seeds.
+      // Nothing is copy-pasted: every sentence is Markov-generated and
+      // seeded from content words found in the most relevant neurons.
       respond(question) {
-        if (!this.trained || this.corpusTokens < 80) return null;
+        if (!this.trained || this.corpusTokens < 50) return null;
 
         const STOP = new Set(["the","a","an","is","are","was","were","be","been","have",
           "has","had","do","does","did","will","would","could","should","can","what","how",
           "why","when","where","who","that","this","with","from","for","and","or","but",
-          "not","its","it","in","on","at","by","to","of","i","you","we","they","he","she"]);
+          "not","its","it","in","on","at","by","to","of","i","you","we","they","he","she",
+          "also","just","more","than","then","there","their","about","which","these","those"]);
+
         const qWords = question.toLowerCase()
           .replace(/[^a-z ]/g, " ").split(/\s+/)
           .filter(w => w.length >= 2 && !STOP.has(w));
         if (!qWords.length) return null;
 
+        // Score neurons by keyword overlap across all accumulated snippets
         const scored = neurons
           .filter(n => n.type === "permanent" && !n.dead && (n.snippets?.length || n.snippet))
           .map(n => {
             const corpus = (n.snippets || []).map(s => s.text).concat(n.snippet || "").join(" ").toLowerCase();
-            return { n, score: qWords.reduce((s, w) => s + (corpus.includes(w) ? 1 : 0), 0) };
+            return { score: qWords.reduce((s, w) => s + (corpus.includes(w) ? 1 : 0), 0), corpus };
           })
           .filter(x => x.score > 0)
-          .sort((a, b) => b.score - a.score);
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 6);
 
         if (!scored.length) return null;
 
-        const BRIDGE = ["Furthermore, ", "Additionally, ", "Related to this, ", "It is also noted that "];
-        const seeds  = qWords.filter(w => this.bigrams.has(w));
+        // Extract high-value content words from the top matching corpora.
+        // Rank by frequency — the most common non-stop words are the
+        // most central concepts in what SPORE knows about this topic.
+        const topCorpus = scored.map(x => x.corpus).join(" ");
+        const freq = new Map();
+        this._tokenize(topCorpus)
+          .filter(w => w.length >= 3 && !STOP.has(w) && this.bigrams.has(w))
+          .forEach(w => freq.set(w, (freq.get(w) || 0) + 1));
+
+        const corpusSeeds = [...freq.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([w]) => w);
+
+        // Question keywords steer the topic; corpus seeds provide substance
+        const qSeeds = qWords.filter(w => this.bigrams.has(w));
+        const seeds  = [...new Set([...qSeeds, ...corpusSeeds])].slice(0, 5);
+        if (!seeds.length) return null;
+
+        // Generate 2–3 sentences, each seeded from a different word so
+        // they cover different facets of the topic
         const parts  = [];
-
-        // 1. Grounded sentence from best-matching node
-        const topSnips = scored[0].n.snippets?.length ? scored[0].n.snippets : [{ text: scored[0].n.snippet }];
-        const topSent  = (topSnips.at(-1)?.text || "").split(/[.!?]/)[0].trim();
-        if (topSent.length > 20) parts.push(topSent + ".");
-
-        // 2. ML-generated sentence seeded by a question keyword
-        if (seeds.length) {
-          const gen = this.generate(seeds[0], 26);
-          if (gen && gen.split(" ").length >= 5)
-            parts.push(gen.charAt(0).toUpperCase() + gen.slice(1) + (gen.endsWith(".") ? "" : "."));
-        }
-
-        // 3. Second grounded fact from next-best node
-        if (scored.length > 1) {
-          const alt     = scored[1].n;
-          const altSnips = alt.snippets?.length ? alt.snippets : [{ text: alt.snippet }];
-          const altSent  = (altSnips.at(-1)?.text || "").split(/[.!?]/).find(s => s.trim().length > 20)?.trim();
-          if (altSent) parts.push(BRIDGE[parts.length % BRIDGE.length] + altSent.charAt(0).toLowerCase() + altSent.slice(1) + ".");
-        }
-
-        // 4. Optional second ML extension
-        if (seeds.length > 1 && parts.length < 3) {
-          const gen2 = this.generate(seeds[1], 22);
-          if (gen2 && gen2.split(" ").length >= 5)
-            parts.push(BRIDGE[1] + gen2.charAt(0).toLowerCase() + gen2.slice(1) + (gen2.endsWith(".") ? "" : "."));
+        const BRIDGE = ["Furthermore, ", "Additionally, ", "Related to this, "];
+        for (const seed of seeds) {
+          if (parts.length >= 3) break;
+          const gen = this.generate(seed, 32);
+          if (!gen || gen.split(" ").length < 4) continue;
+          const sentence = gen.charAt(0).toUpperCase() + gen.slice(1) + (gen.endsWith(".") ? "" : ".");
+          parts.push(parts.length === 0
+            ? sentence
+            : BRIDGE[(parts.length - 1) % BRIDGE.length] + sentence.charAt(0).toLowerCase() + sentence.slice(1));
         }
 
         return parts.length ? parts.join(" ") : null;
@@ -1671,39 +1679,35 @@
 
     // ── SPORE response engine ─────────────────────────────
     // ISOLATION ENFORCED: no AI calls, only knowledge bank + context neurons.
-    // Primary path: SporeML (Markov + scored retrieval).
-    // Fallback: raw snippet concatenation.
+    // All responses are generated — nothing is copy-pasted from stored text.
     function sporeRespond(question, contextNeurons) {
-      // ── ML primary path ──────────────────────────────────
+      // ── ML primary path (generative) ─────────────────────
       const mlReply = sporeML.respond(question);
       if (mlReply) return mlReply;
 
-      // ── Fallback: raw snippet concatenation ──────────────
-      const STOP = new Set(["the","a","an","is","are","was","were","be","been","have","has","had","do","does","did","will","would","could","should","can","what","how","why","when","where","who","that","this","with","from","for","and","or","but","not","its","it","in","on","at","by","to","of"]);
-      const qWords = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 2 && !STOP.has(w));
-      if (!qWords.length) return "My knowledge bank is still forming. Try asking after more training cycles.";
+      // ── Early fallback: not enough corpus yet ─────────────
+      // Seed the model with any context neurons passed in,
+      // then try a single generated sentence from any matching seed.
+      const STOP = new Set(["the","a","an","is","are","was","were","be","been","have","has",
+        "had","do","does","did","will","would","could","should","can","what","how","why",
+        "when","where","who","that","this","with","from","for","and","or","but","not",
+        "its","it","in","on","at","by","to","of"]);
+      const qWords = question.toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/)
+        .filter(w => w.length >= 2 && !STOP.has(w));
 
-      const scoreNode = n => {
-        const text = [n.concept, n.snippet, ...(n.snippets || []).map(s => s.text)].filter(Boolean).join(" ").toLowerCase();
-        return qWords.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
-      };
+      // Try generating from any qWord that exists in the bigram model
+      for (const w of qWords) {
+        if (!sporeML.bigrams.has(w)) continue;
+        const gen = sporeML.generate(w, 28);
+        if (gen && gen.split(" ").length >= 4)
+          return gen.charAt(0).toUpperCase() + gen.slice(1) + (gen.endsWith(".") ? "" : ".");
+      }
 
-      const bankHits = neurons
-        .filter(n => n.snippet && n.type === "permanent")
-        .map(n => ({ n, s: scoreNode(n) }))
-        .filter(x => x.s > 0)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 3)
-        .map(x => x.n);
-
-      const CONN = ["Additionally, ", "Furthermore, ", "It is also noted that ", "Related to this, "];
-      const snippets = [
-        ...contextNeurons.filter(n => n.snippet).map(n => n.snippet.slice(0, 220)),
-        ...bankHits.filter(n => n.snippet).map(n => n.snippet.slice(0, 160)),
-      ].slice(0, 4);
-
-      if (!snippets.length) return "My knowledge bank contains no relevant entries for this topic. Further learning is required.";
-      return snippets.map((s, i) => (i === 0 ? s : CONN[i % CONN.length] + s)).join(" ");
+      // Absolute fallback: corpus is genuinely too small
+      const perm = neurons.filter(n => n.type === "permanent" && !n.dead).length;
+      return perm > 0
+        ? "My knowledge is still forming on this topic. Ask again after more training cycles."
+        : "No knowledge yet — start training to build my understanding.";
     }
 
     // ── Training UI helpers ───────────────────────────────
