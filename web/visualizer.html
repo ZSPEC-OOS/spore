@@ -232,6 +232,7 @@
     <div class="stat"><span>Neurons</span><span id="neurons">6</span></div>
     <div class="stat"><span>Synapses</span><span id="synapses">5</span></div>
     <div class="stat"><span>Knowledge</span><span id="knowledge">0.0 MB</span></div>
+    <div class="stat"><span>Level</span><span id="level-display">1 — Greetings</span></div>
     <div class="row"><button id="general">Learn General</button><button id="pause">Pause/Resume</button></div>
     <div class="row"><input id="topic" placeholder="topic e.g. quantum computing" /></div>
     <div class="row"><button id="specialize">Specialize Topic</button><button id="ask">Ask</button></div>
@@ -286,6 +287,7 @@
       <h4>🗂 Brain Storage</h4>
       <div class="row">
         <button id="choose-folder">📁 Choose Folder</button>
+        <button id="reconnect-folder" style="display:none;width:auto;padding:6px 10px">🔓 Reconnect</button>
       </div>
       <div id="folder-path" style="font-size:10px;color:#8deaff;margin-top:4px;word-break:break-all;min-height:13px">No folder selected — brain lives in memory only</div>
       <div class="row">
@@ -494,20 +496,28 @@
     // ── Neuron ───────────────────────────────────────────
     class Neuron {
       constructor(concept, x, y, layer, data = {}) {
-        this.concept    = concept;
-        this.x          = x;
-        this.y          = y;
-        this.layer      = layer;
-        this.radius     = 8;
-        this.targetRadius = 8;
-        this.phase      = Math.random() * Math.PI * 2;
-        this.url        = data.url     || null;
-        this.snippet    = data.snippet || null;
-        this.source     = data.source  || "core";
-        this.createdAt  = new Date().toLocaleTimeString();
-        this.type       = "permanent"; // "permanent" | "context"
+        this.concept        = concept;
+        this.x              = x;
+        this.y              = y;
+        this.layer          = layer;
+        this.radius         = 8;
+        this.targetRadius   = 8;
+        this.phase          = Math.random() * Math.PI * 2;
+        this.url            = data.url     || null;
+        this.snippet        = data.snippet || null;
+        this.source         = data.source  || "core";
+        this.createdAt      = new Date().toLocaleTimeString();
+        this.type           = "permanent"; // "permanent" | "context"
+        this.knowledgeCount = 0;           // increments each time a snippet is committed
+        this.dead           = false;       // true when source file is deleted
+        this.deadAlpha      = 1.0;         // fades 1→0 after death
       }
       update() {
+        if (this.dead) {
+          // Slow fade — takes ~3 min at 60fps to fully disappear
+          this.deadAlpha = Math.max(0, this.deadAlpha - 0.00033);
+          return;
+        }
         this.phase += 0.02;
         this.radius += (this.targetRadius - this.radius) * 0.1;
         this.targetRadius = Math.max(8, this.targetRadius * 0.985);
@@ -515,26 +525,43 @@
         this.y += Math.cos(this.phase * 0.8) * 0.15;
       }
       draw() {
-        const isCtx = this.type === "context";
-        const rgb   = isCtx ? "255,140,0" : "0,242,255";
-        const rgb2  = isCtx ? "255,80,0"  : "0,102,255";
-        const solid = isCtx ? "#ff8c00"   : "#00f2ff";
-        const pulse = Math.sin(this.phase) * 0.25 + 1;
-        const glow  = this.radius * 2.2 * pulse;
-        const grad  = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
-        grad.addColorStop(0, `rgba(${rgb},0.8)`);
+        if (this.dead) {
+          if (this.deadAlpha <= 0) return;
+          ctx.save();
+          ctx.globalAlpha = this.deadAlpha;
+          const flicker = Math.sin(Date.now() * 0.003 + this.phase) * 0.15 + 0.85;
+          const glow    = this.radius * 2.5;
+          const grad    = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glow);
+          grad.addColorStop(0, `rgba(255,60,60,0.7)`);
+          grad.addColorStop(1, `rgba(160,0,0,0)`);
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(this.x, this.y, glow, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,80,80,${flicker})`;
+          ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = `rgba(255,180,180,${this.deadAlpha * 0.7})`;
+          ctx.font = "10px Courier New"; ctx.textAlign = "center";
+          ctx.fillText(this.concept.slice(0, 14), this.x, this.y + this.radius + 14);
+          ctx.restore();
+          return;
+        }
+        // Knowledge-scaled glow: new nodes are dim, grow brighter as they accumulate snippets
+        const isCtx   = this.type === "context";
+        const kGlow   = Math.min(1, this.knowledgeCount / 15); // 0→1 over 15 commits
+        const rgb     = isCtx ? "255,140,0" : "0,242,255";
+        const rgb2    = isCtx ? "255,80,0"  : "0,102,255";
+        const solid   = isCtx ? "#ff8c00"   : "#00f2ff";
+        const pulse   = Math.sin(this.phase) * (0.2 + kGlow * 0.25) + 1;
+        const glowR   = this.radius * (1.8 + kGlow * 2.0) * pulse;
+        const alpha0  = 0.35 + kGlow * 0.5;
+        const grad    = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, glowR);
+        grad.addColorStop(0, `rgba(${rgb},${alpha0})`);
         grad.addColorStop(1, `rgba(${rgb2},0)`);
         ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, glow, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(this.x, this.y, glowR, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = solid;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#fff";
-        ctx.font = "10px Courier New";
-        ctx.textAlign = "center";
+        ctx.font = "10px Courier New"; ctx.textAlign = "center";
         ctx.fillText(this.concept.slice(0, 14), this.x, this.y + this.radius + 14);
       }
       activate() {
@@ -546,10 +573,11 @@
     // ── Synapse ──────────────────────────────────────────
     class Synapse {
       constructor(a, b) {
-        this.a = a;
-        this.b = b;
-        this.strength = 0.1;
-        this.signal = -1;
+        this.a        = a;
+        this.b        = b;
+        this.strength = 0.08; // starts weak; grows as endpoints accumulate knowledge
+        this.signal   = -1;
+        this.dead     = false;
       }
       update() {
         if (this.signal >= 0) {
@@ -558,24 +586,35 @@
         }
       }
       draw() {
-        ctx.strokeStyle = `rgba(0,242,255,${this.strength * 0.35})`;
-        ctx.lineWidth = this.strength * 2;
-        ctx.beginPath();
-        ctx.moveTo(this.a.x, this.a.y);
-        ctx.lineTo(this.b.x, this.b.y);
+        if (this.dead) {
+          // Fade with the slowest-dying endpoint
+          const alpha = Math.min(this.a.deadAlpha ?? 0, this.b.deadAlpha ?? 0);
+          if (alpha <= 0) return;
+          ctx.save(); ctx.globalAlpha = alpha;
+          ctx.strokeStyle = `rgba(180,40,40,${this.strength * 0.6})`;
+          ctx.lineWidth = 0.5 + this.strength * 1.5;
+          ctx.beginPath(); ctx.moveTo(this.a.x, this.a.y); ctx.lineTo(this.b.x, this.b.y);
+          ctx.stroke(); ctx.restore();
+          return;
+        }
+        // Weak connections: dim blue-grey. Strong: bright cyan.
+        const s  = this.strength;
+        const g  = Math.round(80  + s * 162); // 80→242
+        const bv = Math.round(140 + s * 115); // 140→255
+        ctx.strokeStyle = `rgba(0,${g},${bv},${0.12 + s * 0.65})`;
+        ctx.lineWidth   = 0.4 + s * 3.0;
+        ctx.beginPath(); ctx.moveTo(this.a.x, this.a.y); ctx.lineTo(this.b.x, this.b.y);
         ctx.stroke();
         if (this.signal >= 0) {
           const x = this.a.x + (this.b.x - this.a.x) * this.signal;
           const y = this.a.y + (this.b.y - this.a.y) * this.signal;
           ctx.fillStyle = "#fff";
-          ctx.beginPath();
-          ctx.arc(x, y, 3, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
         }
       }
       transmit() {
-        this.signal = 0;
-        this.strength = Math.min(1, this.strength + 0.08);
+        this.signal   = 0;
+        this.strength = Math.min(1, this.strength + 0.07);
       }
     }
 
@@ -814,6 +853,18 @@
       particles = particles.filter(p => { p.update(); p.draw(); return p.life > 0; });
       ctx.restore();
       if (isLearning && Math.random() > 0.94) simulateStep();
+
+      // Purge fully-faded dead neurons and their dangling synapses
+      const expired = neurons.filter(n => n.dead && n.deadAlpha <= 0);
+      if (expired.length) {
+        expired.forEach(n => {
+          neurons.splice(neurons.indexOf(n), 1);
+          for (let i = synapses.length - 1; i >= 0; i--)
+            if (synapses[i].a === n || synapses[i].b === n) synapses.splice(i, 1);
+        });
+        syncUI();
+      }
+
       requestAnimationFrame(render);
     }
 
@@ -1288,6 +1339,66 @@
     const tsScores      = [];      // rolling window (last 20)
     let ctxPool         = [];      // context neurons for current cycle
 
+    // ── AI-determined curriculum ─────────────────────────
+    let currentLevel  = 1;   // 1–5 (only the AI may advance this)
+    let levelIter     = 0;   // iterations completed at current level
+    let levelPasses   = 0;   // good responses at current level
+    let levelHistory  = [];  // {q, a, score} for last 8 exchanges — fed to evaluator
+
+    const LEVEL_NAMES   = ["", "Greetings", "Personal", "Concepts", "Reasoning", "Abstract"];
+    const LEVEL_PROMPTS = {
+      1: "ONLY the simplest greeting and identity questions a child would ask first, such as 'How are you?', 'What is your name?', 'Where are you from?', 'How old are you?'. One short question only.",
+      2: "simple personal questions about feelings, preferences, or daily routine, such as 'What do you like?', 'How do you feel today?', 'What is your favourite colour?', 'What did you do today?'",
+      3: "questions about everyday knowledge and concepts, such as 'What causes rain?', 'How do plants grow?', 'What is electricity?', 'Why is the sky blue?'",
+      4: "analytical questions requiring reasoning or comparison, such as 'Why do people form friendships?', 'How does learning change the brain?', 'What is the difference between knowledge and wisdom?'",
+      5: "complex abstract or philosophical questions, such as 'Can a machine truly understand language?', 'What is the nature of consciousness?', 'Is knowledge objective or subjective?'",
+    };
+
+    function levelName(l) { return LEVEL_NAMES[l] || "Advanced"; }
+
+    function updateLevelDisplay() {
+      document.getElementById("level-display").textContent = `${currentLevel} — ${levelName(currentLevel)}`;
+      document.getElementById("phase").textContent = `Level ${currentLevel} — ${levelName(currentLevel)}`;
+    }
+
+    // The AI evaluator decides whether SPORE has mastered the current level.
+    // Called after every good response once minimum iterations are reached.
+    async function checkLevelAdvancement() {
+      if (currentLevel >= 5) return; // already at max
+      const MIN_ITER   = 6;
+      const MIN_PASSES = 4;
+      if (levelIter < MIN_ITER || levelPasses < MIN_PASSES) return;
+
+      const pairs = levelHistory.slice(-6).map((p, i) =>
+        `Q${i+1}: ${p.q}\nA${i+1}: ${p.a}\nScore: ${p.score.toFixed(2)}`
+      ).join("\n---\n");
+
+      log(`🎓 Asking AI: is SPORE ready for level ${currentLevel + 1}?`);
+      const raw = await aiCall([
+        { role: "system", content: `You are SPORE's curriculum evaluator. Your job is to decide whether SPORE has GENUINELY mastered Level ${currentLevel} (${levelName(currentLevel)}) conversational language and deserves to advance to Level ${currentLevel + 1} (${levelName(currentLevel + 1)}). Be strict: occasional good answers are not enough. SPORE must show consistent accuracy across multiple question variations. Reply ONLY with valid JSON: {"advance": true/false, "reason": "one concise sentence", "needsMore": "specific topic to reinforce if not advancing, else null"}` },
+        { role: "user", content: `Level ${currentLevel} — last ${Math.min(6, levelHistory.length)} exchanges:\n${pairs}\n\nTotal at this level: ${levelPasses} passes out of ${levelIter} attempts.\nShould SPORE advance to Level ${currentLevel + 1}?` },
+      ], 150);
+
+      let decision = { advance: false, reason: "Parse error", needsMore: null };
+      try { const m = raw.match(/\{[\s\S]*?\}/); if (m) decision = { ...decision, ...JSON.parse(m[0]) }; } catch(_) {}
+
+      if (decision.advance) {
+        currentLevel++;
+        levelIter = levelPasses = 0;
+        levelHistory = [];
+        updateLevelDisplay();
+        log(`🎓 Level up → ${currentLevel} (${levelName(currentLevel)}): ${decision.reason}`, "ok");
+        tsStatus(`🎓 Advancing to Level ${currentLevel} — ${levelName(currentLevel)}`);
+        saveBrain();
+      } else {
+        log(`📚 Staying at Level ${currentLevel}: ${decision.reason}`, "warn");
+        if (decision.needsMore) {
+          log(`📖 Reinforcing: "${decision.needsMore}"`);
+          learnFromQuery(decision.needsMore).catch(() => {});
+        }
+      }
+    }
+
     // ── Generic AI call helper ────────────────────────────
     async function aiCall(messages, maxTokens = 200) {
       await rateWait(aiLimiter, "AI");
@@ -1359,7 +1470,13 @@
     }
 
     function commitCtxPool() {
-      ctxPool.forEach(n => { n.type = "permanent"; n.activate(); });
+      ctxPool.forEach(n => {
+        n.type = "permanent";
+        n.knowledgeCount++;
+        n.activate();
+        // Every committed snippet strengthens the synapses touching this neuron
+        synapses.forEach(s => { if (s.a === n || s.b === n) s.transmit(); });
+      });
       ctxPool = [];
     }
 
@@ -1380,17 +1497,11 @@
         .forEach(id => { document.getElementById(id).style.display = "none"; });
 
       try {
-        // ── 1. AI generates a question (complexity rises with cycle count) ──
-        tsStatus("🤔 Generating question…");
-        const complexityLevel = (() => {
-          if (tsCycles <  5) return "ONLY very basic greeting or identity questions, such as 'How are you?', 'What is your name?', 'Where are you from?', 'How old are you?'. These must be simple enough for a first conversation.";
-          if (tsCycles < 15) return "simple personal questions about feelings, preferences, or daily life, such as 'What is your favourite colour?', 'Do you like music?', 'What did you do today?'";
-          if (tsCycles < 30) return "questions about everyday concepts and knowledge, such as 'What causes rain?', 'How do plants grow?', 'What is a computer?'";
-          if (tsCycles < 60) return "analytical questions that require reasoning or comparison, such as 'Why do people make friends?', 'What are the differences between day and night?', 'How does learning work?'";
-          return "complex abstract or philosophical questions, such as 'What does it mean to understand something?', 'Can a machine have feelings?', 'What is the nature of knowledge?'";
-        })();
+        // ── 1. AI generates a question at the current curriculum level ──
+        tsStatus(`🤔 Generating Level ${currentLevel} question…`);
+        levelIter++;
         let question = await aiCall([
-          { role: "system", content: `You are a curriculum designer for SPORE, an AI learning natural language. Generate ${complexityLevel} Return ONLY the question text, nothing else.` },
+          { role: "system", content: `You are a curriculum designer for SPORE, an AI learning natural language from scratch. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.` },
           { role: "user",   content: "Generate the next training question." },
         ], 60);
         if (!question) throw new Error("AI returned empty question — check model config");
@@ -1483,13 +1594,20 @@ Reply ONLY with this JSON (no other text):
           `${badge}<div style="margin-top:6px;color:#8deaff;font-size:11px">${result.feedback}</div>`;
         tsShowBlock("ts-assess-block");
 
+        // Track Q&A history for the AI level evaluator
+        levelHistory.push({ q: question, a: sporeReply, score: result.score });
+        if (levelHistory.length > 8) levelHistory.shift();
+
         if (result.good) {
+          levelPasses++;
           commitCtxPool();
           tsCommits++;
           document.getElementById("ts-commits").textContent = tsCommits;
-          tsStatus(`✅ Cycle ${tsCycles} — committed to knowledge bank`);
-          log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)})`, "ok");
-          saveBrain(); // auto-save to chosen folder (no-op if none selected)
+          tsStatus(`✅ Cycle ${tsCycles} — committed (Level ${currentLevel})`);
+          log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)}, level ${currentLevel})`, "ok");
+          saveBrain();
+          // Let the AI decide if SPORE has earned a level-up
+          await checkLevelAdvancement();
         } else {
           clearCtxPool();
           tsStatus(`❌ Cycle ${tsCycles} — knowledge discarded`);
@@ -1515,46 +1633,93 @@ Reply ONLY with this JSON (no other text):
     }
 
 
+    // ── IndexedDB — persist FileSystemDirectoryHandle ────
+    const IDB_DB = "spore-v1", IDB_STORE = "handles";
+    function openIDB() {
+      return new Promise((res, rej) => {
+        const req = indexedDB.open(IDB_DB, 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+        req.onsuccess = e => res(e.target.result);
+        req.onerror   = e => rej(e.target.error);
+      });
+    }
+    async function idbSet(key, val) {
+      const db = await openIDB();
+      return new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(val, key);
+        tx.oncomplete = res; tx.onerror = e => rej(e.target.error);
+      });
+    }
+    async function idbGet(key) {
+      const db = await openIDB();
+      return new Promise(res => {
+        const tx  = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => res(req.result ?? null);
+        req.onerror   = () => res(null);
+      });
+    }
+
     // ── Brain Storage (File System Access API) ───────────
     let brainDirHandle = null;
 
+    function updateFolderUI(name) {
+      document.getElementById("folder-path").textContent = `📁 ${name}`;
+      document.getElementById("save-brain").disabled = false;
+      document.getElementById("load-brain").disabled = false;
+      document.getElementById("reconnect-folder").style.display = "none";
+    }
+
     document.getElementById("choose-folder").onclick = async () => {
       if (!window.showDirectoryPicker) {
-        log("File System Access API not supported in this browser", "err");
-        return;
+        log("File System Access API not supported in this browser", "err"); return;
       }
       try {
         brainDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-        document.getElementById("folder-path").textContent = `📁 ${brainDirHandle.name}`;
-        document.getElementById("save-brain").disabled = false;
-        document.getElementById("load-brain").disabled = false;
-        log(`Brain folder: ${brainDirHandle.name}`, "ok");
+        await idbSet("brainFolder", brainDirHandle);
+        updateFolderUI(brainDirHandle.name);
+        log(`Brain folder set: ${brainDirHandle.name}`, "ok");
       } catch (err) {
         if (err.name !== "AbortError") log(`Folder error: ${err.message}`, "err");
       }
     };
 
+    document.getElementById("reconnect-folder").onclick = async () => {
+      if (!brainDirHandle) return;
+      try {
+        const perm = await brainDirHandle.requestPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          updateFolderUI(brainDirHandle.name);
+          await loadBrain();
+          log(`Reconnected to ${brainDirHandle.name}`, "ok");
+        }
+      } catch (err) { log(`Reconnect error: ${err.message}`, "err"); }
+    };
+
     async function saveBrain() {
       if (!brainDirHandle) return;
       try {
-        const permanent = neurons.filter(n => n.type === "permanent");
+        const permanent   = neurons.filter(n => n.type === "permanent" && !n.dead);
         const neuronIndex = new Map(permanent.map((n, i) => [n, i]));
         const data = {
-          version: 1,
-          savedAt: new Date().toISOString(),
+          version: 2,
+          savedAt:      new Date().toISOString(),
+          currentLevel, levelIter, levelPasses,
           neurons: permanent.map(n => ({
             concept: n.concept, x: n.x, y: n.y, layer: n.layer,
             url: n.url, snippet: n.snippet, source: n.source,
+            knowledgeCount: n.knowledgeCount || 0,
           })),
           synapses: synapses
             .filter(s => neuronIndex.has(s.a) && neuronIndex.has(s.b))
-            .map(s => ({ a: neuronIndex.get(s.a), b: neuronIndex.get(s.b), weight: s.weight || 1 })),
+            .map(s => ({ a: neuronIndex.get(s.a), b: neuronIndex.get(s.b), strength: s.strength })),
         };
-        const fh  = await brainDirHandle.getFileHandle("spore-brain.json", { create: true });
+        const fh       = await brainDirHandle.getFileHandle("spore-brain.json", { create: true });
         const writable = await fh.createWritable();
         await writable.write(JSON.stringify(data, null, 2));
         await writable.close();
-        log(`Brain saved — ${data.neurons.length} neurons, ${data.synapses.length} synapses`, "ok");
+        log(`Brain saved — ${data.neurons.length} neurons, ${data.synapses.length} synapses (level ${currentLevel})`, "ok");
       } catch (err) { log(`Save error: ${err.message}`, "err"); }
     }
 
@@ -1564,29 +1729,83 @@ Reply ONLY with this JSON (no other text):
         const fh   = await brainDirHandle.getFileHandle("spore-brain.json");
         const file = await fh.getFile();
         const data = JSON.parse(await file.text());
-        neurons.length  = 0;
-        synapses.length = 0;
+
+        neurons.length = 0; synapses.length = 0;
         data.neurons.forEach(n => {
           const node = new Neuron(n.concept, n.x, n.y, n.layer,
             { url: n.url, snippet: n.snippet, source: n.source });
-          node.type = "permanent";
+          node.type           = "permanent";
+          node.knowledgeCount = n.knowledgeCount || 0;
           neurons.push(node);
         });
         (data.synapses || []).forEach(s => {
-          if (neurons[s.a] && neurons[s.b])
-            synapses.push(new Synapse(neurons[s.a], neurons[s.b]));
+          if (neurons[s.a] && neurons[s.b]) {
+            const syn = new Synapse(neurons[s.a], neurons[s.b]);
+            syn.strength = s.strength ?? 0.08;
+            synapses.push(syn);
+          }
         });
+        // Restore curriculum progress
+        if (data.currentLevel) { currentLevel = data.currentLevel; levelIter = data.levelIter || 0; levelPasses = data.levelPasses || 0; }
+        updateLevelDisplay();
         syncUI();
-        log(`Brain loaded — ${neurons.length} neurons, ${synapses.length} synapses`, "ok");
-      } catch (err) { log(`Load error: ${err.message}`, "err"); }
+        log(`Brain loaded — ${neurons.length} neurons, ${synapses.length} synapses (level ${currentLevel})`, "ok");
+      } catch (err) {
+        if (err.name === "NotFoundError") {
+          log("No saved brain found — starting fresh", "warn");
+        } else {
+          log(`Load error: ${err.message}`, "err");
+        }
+      }
     }
 
     document.getElementById("save-brain").onclick = saveBrain;
     document.getElementById("load-brain").onclick  = loadBrain;
 
+    // ── Dead-node detection: watch for brain file deletion ─
+    // Every 30 s, if a folder is set, confirm spore-brain.json still exists.
+    setInterval(async () => {
+      if (!brainDirHandle) return;
+      try {
+        await brainDirHandle.getFileHandle("spore-brain.json");
+      } catch (e) {
+        if (e.name === "NotFoundError") {
+          const living = neurons.filter(n => n.type === "permanent" && !n.dead);
+          if (living.length > 0) {
+            log("⚠ spore-brain.json was deleted — neurons fading…", "err");
+            living.forEach(n => { n.dead = true; });
+            synapses.forEach(s => { s.dead = true; });
+          }
+        }
+      }
+    }, 30000);
+
+    // ── Auto-restore folder handle from previous session ──
+    async function tryAutoLoad() {
+      const handle = await idbGet("brainFolder").catch(() => null);
+      if (!handle) return;
+      brainDirHandle = handle;
+      try {
+        const perm = await handle.queryPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          updateFolderUI(handle.name);
+          await loadBrain();
+        } else {
+          // Permission needs a user gesture — show reconnect button
+          document.getElementById("folder-path").textContent = `📁 ${handle.name} — click 🔓 to reconnect`;
+          document.getElementById("reconnect-folder").style.display = "";
+        }
+      } catch (_) {
+        log("Previous brain folder no longer accessible", "warn");
+        brainDirHandle = null;
+      }
+    }
+
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
     boot();
+    updateLevelDisplay();
+    tryAutoLoad();
   </script>
 </body>
 </html>
