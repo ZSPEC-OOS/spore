@@ -1660,7 +1660,12 @@
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      return (data.choices?.[0]?.message?.content || "").trim();
+      const choice = data.choices?.[0];
+      const content = (choice?.message?.content || "").trim();
+      if (!content && choice?.finish_reason && choice.finish_reason !== "stop") {
+        throw new Error(`AI returned empty content (finish_reason: ${choice.finish_reason})`);
+      }
+      return content;
     }
 
     // ══════════════════════════════════════════════════════
@@ -2096,7 +2101,6 @@ Reply ONLY with this JSON (no other text):
 
       try {
         // ── 1. AI generates a unique question ───────────────
-        tsStatus(`⚗ [Distill] Level ${currentLevel} question…`);
         levelIter++;
 
         // Build a compact list of previously asked questions to avoid
@@ -2105,24 +2109,34 @@ Reply ONLY with this JSON (no other text):
           ? `\n\nYou have already asked these questions — do NOT repeat or closely paraphrase any of them:\n${prevList.slice(-80).map((q, i) => `${i + 1}. ${q}`).join("\n")}`
           : "";
 
-        let question = await aiCall([
-          { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
-          { role: "user",   content: "Generate the next training question." },
-        ], 60);
-        if (!question) throw new Error("AI returned empty question — check model config");
-
         // Normalise for dedup check (lowercase, strip punctuation)
         const normalise = q => q.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
-        const normQ = normalise(question);
 
-        // If it's a near-duplicate, ask once more with an explicit nudge
-        if ([...distillAskedQuestions].some(q => normalise(q) === normQ)) {
-          tsStatus(`⚗ [Distill] Duplicate detected — regenerating…`);
+        let question = "";
+        const MAX_Q_ATTEMPTS = 3;
+        for (let attempt = 1; attempt <= MAX_Q_ATTEMPTS; attempt++) {
+          const userMsg = attempt === 1
+            ? "Generate the next training question."
+            : "The previous attempt returned empty or a duplicate. Generate a completely different training question on a new angle or subtopic.";
+          tsStatus(`⚗ [Distill] Level ${currentLevel} question… (attempt ${attempt}/${MAX_Q_ATTEMPTS})`);
           question = await aiCall([
             { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
-            { role: "user",   content: "The previous question was a duplicate. Generate a completely different training question on a new angle or subtopic." },
+            { role: "user",   content: userMsg },
           ], 60);
-          if (!question) throw new Error("AI returned empty question on retry");
+          if (!question) {
+            if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned empty question after 3 attempts — check model config (API key, model ID, and content policy)");
+            log(`⚠ Empty question on attempt ${attempt}, retrying…`, "warn");
+            continue;
+          }
+          // If it's a near-duplicate, retry with an explicit nudge
+          if ([...distillAskedQuestions].some(q => normalise(q) === normalise(question))) {
+            if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned duplicate question after 3 attempts — question pool may be exhausted");
+            tsStatus(`⚗ [Distill] Duplicate detected — regenerating…`);
+            log(`⚠ Duplicate question on attempt ${attempt}, retrying…`, "warn");
+            question = "";
+            continue;
+          }
+          break; // valid unique question obtained
         }
 
         // Record and persist
