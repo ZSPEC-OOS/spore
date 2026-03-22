@@ -15,7 +15,9 @@
       border: 1px solid #00f2ff; border-radius: 10px; padding: 16px;
       box-shadow: 0 0 24px rgba(0,242,255,0.2);
       overflow-y: auto;
+      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
     }
+    #ui.panel-collapsed { transform: translateX(calc(-100% - 20px)); }
     #ui::-webkit-scrollbar { width: 4px; }
     #ui::-webkit-scrollbar-track { background: transparent; }
     #ui::-webkit-scrollbar-thumb { background: #00f2ff44; border-radius: 4px; }
@@ -67,7 +69,9 @@
       border: 1px solid #ff8c00; border-radius: 10px; padding: 16px;
       box-shadow: 0 0 24px rgba(255,140,0,0.18);
       overflow-y: auto; font-family: "Courier New", monospace; font-size: 12px; color: #00f2ff;
+      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
     }
+    #training-sandbox.panel-collapsed { transform: translateX(calc(100% + 20px)); }
     #training-sandbox::-webkit-scrollbar { width: 4px; }
     #training-sandbox::-webkit-scrollbar-thumb { background: #ff8c0044; border-radius: 4px; }
     #ts-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
@@ -145,6 +149,59 @@
       50%       { box-shadow: 0 -4px 48px rgba(0,242,255,0.5); }
     }
     #chat-panel.emerged { animation: chat-glow-pulse 1.5s ease 0.1s 2; }
+    #chat-panel.emerged.user-collapsed {
+      transform: translateX(-50%) translateY(100%);
+      pointer-events: none; opacity: 0;
+    }
+    /* ── Panel edge tabs ────────────────────────────────── */
+    .panel-tab {
+      position: fixed; z-index: 12;
+      background: rgba(10,10,26,0.92);
+      border: none; outline: none; cursor: pointer;
+      font-family: "Courier New", monospace; font-size: 10px;
+      letter-spacing: .1em; text-transform: uppercase;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      transition: background 0.2s, box-shadow 0.2s;
+      user-select: none;
+    }
+    .panel-tab:hover { background: rgba(22,22,44,0.98); }
+    /* Left tab */
+    #ui-tab {
+      left: 0; top: 50vh; transform: translateY(-50%);
+      width: 22px; padding: 12px 0; flex-direction: column;
+      color: #00f2ff; border: 1px solid #00f2ff; border-left: none;
+      border-radius: 0 6px 6px 0;
+      box-shadow: 3px 0 14px rgba(0,242,255,0.14);
+      writing-mode: vertical-lr;
+    }
+    #ui-tab:hover { box-shadow: 3px 0 20px rgba(0,242,255,0.3); }
+    #ui-tab .tab-chevron { font-size: 9px; transition: transform 0.3s; }
+    #ui-tab.flipped .tab-chevron { transform: rotate(180deg); }
+    /* Right tab */
+    #ts-tab {
+      right: 0; top: 50vh; transform: translateY(-50%);
+      width: 22px; padding: 12px 0; flex-direction: column;
+      color: #ff8c00; border: 1px solid #ff8c00; border-right: none;
+      border-radius: 6px 0 0 6px;
+      box-shadow: -3px 0 14px rgba(255,140,0,0.14);
+      writing-mode: vertical-lr;
+    }
+    #ts-tab:hover { box-shadow: -3px 0 20px rgba(255,140,0,0.3); }
+    #ts-tab .tab-chevron { font-size: 9px; transition: transform 0.3s; }
+    #ts-tab.flipped .tab-chevron { transform: rotate(180deg); }
+    /* Bottom chat tab */
+    #chat-tab {
+      bottom: 0; left: 50%; transform: translateX(-50%);
+      height: 26px; padding: 0 20px; flex-direction: row;
+      color: #00f2ff; border: 1px solid #00f2ff; border-bottom: none;
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -3px 14px rgba(0,242,255,0.14);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.4s ease, box-shadow 0.2s;
+    }
+    #chat-tab.tab-visible { opacity: 1; pointer-events: all; }
+    #chat-tab:hover { box-shadow: 0 -3px 22px rgba(0,242,255,0.35); }
+    #chat-tab .tab-arrow { font-size: 10px; transition: transform 0.3s; }
     #canvas { cursor: grab; }
     #canvas.dragging { cursor: grabbing; }
     #reset-view {
@@ -229,6 +286,20 @@
       <div id="log"></div>
     </div><!-- /#ai-collapsible -->
   </aside>
+
+  <!-- ── Panel edge tabs ──────────────────────────────── -->
+  <button class="panel-tab" id="ui-tab" aria-label="Toggle AI Config panel">
+    <span class="tab-chevron">◂</span>
+    <span>AI&nbsp;CFG</span>
+  </button>
+  <button class="panel-tab" id="ts-tab" aria-label="Toggle Training panel">
+    <span>TRAIN</span>
+    <span class="tab-chevron">▸</span>
+  </button>
+  <button class="panel-tab" id="chat-tab" aria-label="Toggle chat panel">
+    <span class="tab-arrow">↓</span>
+    <span>💬 SPORE CHAT</span>
+  </button>
 
   <!-- ── Training Sandbox (upper right) ──────────────── -->
   <div id="training-sandbox">
@@ -1066,12 +1137,37 @@
       renderChat();
     }
 
+    // ── Panel collapse toggles ────────────────────────────
+    document.getElementById("ui-tab").onclick = () => {
+      const panel = document.getElementById("ui");
+      const tab   = document.getElementById("ui-tab");
+      panel.classList.toggle("panel-collapsed");
+      tab.classList.toggle("flipped", panel.classList.contains("panel-collapsed"));
+    };
+
+    document.getElementById("ts-tab").onclick = () => {
+      const panel = document.getElementById("training-sandbox");
+      const tab   = document.getElementById("ts-tab");
+      panel.classList.toggle("panel-collapsed");
+      tab.classList.toggle("flipped", panel.classList.contains("panel-collapsed"));
+    };
+
+    document.getElementById("chat-tab").onclick = () => {
+      const panel = document.getElementById("chat-panel");
+      const tab   = document.getElementById("chat-tab");
+      const collapsing = !panel.classList.contains("user-collapsed");
+      panel.classList.toggle("user-collapsed", collapsing);
+      tab.querySelector(".tab-arrow").textContent = collapsing ? "↑" : "↓";
+    };
+
     // ── emergeChat — called once when SPORE reaches readiness ─
     function emergeChat(avgScore, cycles) {
       if (chatEmerged) return;
       chatEmerged = true;
-      const panel = document.getElementById("chat-panel");
+      const panel  = document.getElementById("chat-panel");
+      const chatTabEl = document.getElementById("chat-tab");
       panel.classList.add("emerged");
+      chatTabEl.classList.add("tab-visible");
       chatAppend("spore",
         `I am ready to communicate. My knowledge bank now contains ${
           neurons.filter(n => n.type === "permanent" && n.snippet).length
