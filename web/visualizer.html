@@ -255,15 +255,79 @@
       background: rgba(0,242,255,0.13); border-color: #00f2ff; color: #00f2ff;
       box-shadow: 0 0 14px rgba(0,242,255,0.28);
     }
+    /* ── Simple Visualizer ─────────────────────────────── */
+    #simple-viz {
+      position: fixed; inset: 0; z-index: 1; background: #0a0a1a;
+      display: flex; flex-direction: column;
+      padding: 56px 340px 60px 340px;
+      font-family: "Courier New", monospace; overflow: hidden;
+    }
+    #sv-header {
+      display: flex; gap: 14px; align-items: center; flex-shrink: 0;
+      font-size: 11px; color: #8deaff; margin-bottom: 10px;
+      border-bottom: 1px solid rgba(0,242,255,0.12); padding-bottom: 8px;
+    }
+    #sv-title { font-size: 13px; color: #00f2ff; letter-spacing: .04em; }
+    #sv-live-dot { color: #00ff88; animation: blink .8s step-end infinite; }
+    #sv-grid {
+      display: flex; flex-wrap: wrap; gap: 7px;
+      overflow-y: auto; align-content: flex-start; flex: 1;
+    }
+    #sv-grid::-webkit-scrollbar { width: 4px; }
+    #sv-grid::-webkit-scrollbar-thumb { background: #00f2ff22; border-radius: 4px; }
+    .sv-card {
+      width: 148px; padding: 8px 10px; border-radius: 6px;
+      border: 1px solid rgba(0,242,255,0.18);
+      background: rgba(0,242,255,0.03);
+      transition: border-color 0.35s, background 0.35s, box-shadow 0.35s;
+    }
+    .sv-card.sv-ctx {
+      border-color: rgba(255,140,0,0.25); background: rgba(255,140,0,0.04);
+    }
+    .sv-card.sv-active {
+      border-color: #00f2ff; background: rgba(0,242,255,0.10);
+      box-shadow: 0 0 12px rgba(0,242,255,0.25);
+    }
+    .sv-card.sv-ctx.sv-active {
+      border-color: #ff8c00; background: rgba(255,140,0,0.13);
+      box-shadow: 0 0 12px rgba(255,140,0,0.3);
+    }
+    .sv-concept {
+      font-size: 11px; color: #00f2ff; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sv-card.sv-ctx .sv-concept { color: #ff8c00; }
+    .sv-meta { color: #8deaff; font-size: 9px; }
+    .sv-bar { height: 2px; background: rgba(0,242,255,0.12); border-radius: 1px; margin-top: 5px; }
+    .sv-bar-fill { height: 100%; background: rgba(0,242,255,0.55); border-radius: 1px; transition: width 0.6s; }
+    .sv-card.sv-ctx .sv-bar-fill { background: rgba(255,140,0,0.6); }
+    .sv-card.sv-active .sv-bar-fill { background: #00f2ff; }
+    .sv-card.sv-ctx.sv-active .sv-bar-fill { background: #ff8c00; }
+    #sv-overflow { font-size: 10px; color: #8deaff55; text-align: center; padding: 6px 0; }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
 
+  <!-- ── Simple Visualizer (default, lightweight) ─────── -->
+  <div id="simple-viz">
+    <div id="sv-header">
+      <span id="sv-title">🧠 SPORE</span>
+      <span id="sv-neuron-ct">0 neurons</span>
+      <span id="sv-synapse-ct">0 synapses</span>
+      <span id="sv-phase-txt"></span>
+      <span id="sv-live-dot" style="display:none">● LIVE</span>
+    </div>
+    <div id="sv-grid"></div>
+    <div id="sv-overflow"></div>
+  </div>
+
   <!-- ── Canvas overlay controls ──────────────────────── -->
   <div id="canvas-controls">
-    <button class="cvs-btn" id="btn-anim-pause" title="Pause / resume the visual animation">⏸ Pause</button>
-    <button class="cvs-btn" id="btn-hide-brain" title="Hide the neural canvas to free up GPU/CPU">◉ Hide Brain</button>
+    <button class="cvs-btn active" id="btn-viz-simple" title="Simple view — lightweight, no canvas (default)">⬡ Simple</button>
+    <button class="cvs-btn"        id="btn-viz-complex" title="Complex canvas view — full neural animation">◈ Complex</button>
+    <button class="cvs-btn" id="btn-anim-pause" title="Pause / resume the visual animation" style="display:none">⏸ Pause</button>
+    <button class="cvs-btn" id="btn-hide-brain" title="Hide the neural canvas to free up GPU/CPU" style="display:none">◉ Hide Brain</button>
   </div>
 
   <aside id="ui">
@@ -577,6 +641,9 @@
     let isLearning = false;
     let learningProgress = 0;
 
+    // ── Visualizer mode: "simple" (default, low-CPU) | "complex" (canvas) ──
+    let vizMode = localStorage.getItem("spore-viz-mode") || "simple";
+
     // ── Camera (pan / zoom) ──────────────────────────────
     const camera = { x: 0, y: 0, scale: 1 };
     const BASE_CAMERA = () => ({ x: 0, y: 0, scale: 1 });
@@ -715,8 +782,11 @@
         ctx.fillText(this.concept.slice(0, 14), this.x, this.y + this.radius + 14);
       }
       activate() {
+        this._lastActivated = Date.now();
         this.targetRadius = Math.min(24, this.targetRadius + 5);
-        for (let i = 0; i < 5; i++) particles.push(new Particle(this.x, this.y));
+        if (vizMode !== "simple") {
+          for (let i = 0; i < 5; i++) particles.push(new Particle(this.x, this.y));
+        }
       }
     }
 
@@ -1000,7 +1070,7 @@
     }
 
     function render() {
-      if (!brainHidden) {
+      if (vizMode === "complex" && !brainHidden) {
         ctx.fillStyle = "rgba(10,10,26,0.22)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.save();
@@ -2792,9 +2862,96 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       tsStatus("↺ Reset — ready to start fresh");
     };
 
+    // ── Simple Visualizer ────────────────────────────────
+    const MAX_SV_CARDS = 80;
+
+    function refreshSimpleView() {
+      if (vizMode !== "simple") return;
+      const now = Date.now();
+      const visible_neurons = neurons.filter(n => !n.dead);
+
+      // Sort: recently activated first, then most knowledge
+      const sorted = [...visible_neurons].sort((a, b) => {
+        const aAct = now - (a._lastActivated || 0) < 1500 ? 1 : 0;
+        const bAct = now - (b._lastActivated || 0) < 1500 ? 1 : 0;
+        if (bAct !== aAct) return bAct - aAct;
+        return (b.knowledgeCount || 0) - (a.knowledgeCount || 0);
+      });
+
+      const shown    = sorted.slice(0, MAX_SV_CARDS);
+      const overflow = sorted.length - shown.length;
+
+      // Connection count per node
+      const connMap = {};
+      synapses.forEach(s => {
+        if (!s.dead) {
+          connMap[s.a.id] = (connMap[s.a.id] || 0) + 1;
+          connMap[s.b.id] = (connMap[s.b.id] || 0) + 1;
+        }
+      });
+
+      document.getElementById("sv-grid").innerHTML = shown.map(n => {
+        const isActive = now - (n._lastActivated || 0) < 1500;
+        const isCtx    = n.type === "context";
+        const conns    = connMap[n.id] || 0;
+        const kc       = n.knowledgeCount || 0;
+        const barW     = Math.min(100, kc * 7);
+        const cls      = `sv-card${isCtx ? " sv-ctx" : ""}${isActive ? " sv-active" : ""}`;
+        return `<div class="${cls}">
+          <div class="sv-concept">${n.concept.slice(0, 18)}</div>
+          <div class="sv-meta">L${n.layer} · ${conns} links · ${kc} snip</div>
+          <div class="sv-bar"><div class="sv-bar-fill" style="width:${barW}%"></div></div>
+        </div>`;
+      }).join("");
+
+      document.getElementById("sv-overflow").textContent =
+        overflow > 0 ? `…and ${overflow} more neurons` : "";
+      document.getElementById("sv-neuron-ct").textContent  = `${visible_neurons.length} neurons`;
+      document.getElementById("sv-synapse-ct").textContent = `${synapses.filter(s=>!s.dead).length} synapses`;
+      document.getElementById("sv-phase-txt").textContent  = document.getElementById("phase").textContent;
+      document.getElementById("sv-live-dot").style.display = isTraining ? "" : "none";
+    }
+
+    function applyVizMode() {
+      const simple = vizMode === "simple";
+      // Canvas & simple container visibility
+      canvas.style.display = simple ? "none" : "block";
+      document.getElementById("simple-viz").style.display = simple ? "flex" : "none";
+      // Toggle button states
+      document.getElementById("btn-viz-simple").classList.toggle("active", simple);
+      document.getElementById("btn-viz-complex").classList.toggle("active", !simple);
+      // Pause / Hide Brain only relevant in complex mode
+      document.getElementById("btn-anim-pause").style.display = simple ? "none" : "";
+      document.getElementById("btn-hide-brain").style.display = simple ? "none" : "";
+      // Reset canvas state when entering complex so it isn't blank
+      if (!simple) {
+        brainHidden = false;
+        document.getElementById("btn-hide-brain").textContent = "◉ Hide Brain";
+        document.getElementById("btn-hide-brain").classList.remove("active");
+      }
+      if (simple) refreshSimpleView();
+      localStorage.setItem("spore-viz-mode", vizMode);
+    }
+
+    document.getElementById("btn-viz-simple").onclick = () => {
+      vizMode = "simple";
+      applyVizMode();
+      log("Visualizer: Simple mode (low-CPU)");
+    };
+
+    document.getElementById("btn-viz-complex").onclick = () => {
+      vizMode = "complex";
+      applyVizMode();
+      log("Visualizer: Complex canvas mode");
+    };
+
+    // Refresh simple view every 500 ms — cheap DOM updates, no canvas
+    setInterval(refreshSimpleView, 500);
+
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
     boot();
+    applyVizMode();           // apply simple/complex before first render
     restoreTrainingState();   // restore before updateLevelDisplay so level is correct
     updateLevelDisplay();
     // Chat is always present — mark emerged so the panel and tab are active
