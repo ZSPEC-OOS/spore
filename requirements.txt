@@ -1,0 +1,11 @@
+# SPORE NLWS – Python dependencies
+#
+# Core (required for server.py and the CLI)
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+
+# Optional – enables live DuckDuckGo search (falls back to mock if absent)
+duckduckgo-search>=6.0.0
+
+# Optional – enables external AI model enrichment during web crawls
+openai>=1.0.0

@@ -10,29 +10,55 @@
     #canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
     #ui {
       position: fixed; top: 20px; left: 20px; z-index: 10;
-      width: 320px; background: rgba(10, 10, 26, 0.9);
+      width: 320px; max-height: calc(100vh - 40px);
+      background: rgba(10, 10, 26, 0.92);
       border: 1px solid #00f2ff; border-radius: 10px; padding: 16px;
       box-shadow: 0 0 24px rgba(0,242,255,0.2);
+      overflow-y: auto;
     }
+    #ui::-webkit-scrollbar { width: 4px; }
+    #ui::-webkit-scrollbar-track { background: transparent; }
+    #ui::-webkit-scrollbar-thumb { background: #00f2ff44; border-radius: 4px; }
     .stat { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
     .progress { margin-top: 12px; height: 6px; background: #1a1a3a; border-radius: 999px; overflow: hidden; }
     .progress > div { height: 100%; width: 0; background: linear-gradient(90deg,#00f2ff,#0066ff); transition: width .2s ease; }
-    .row { display: flex; gap: 8px; margin-top: 12px; }
-    input, button {
+    .row { display: flex; gap: 8px; margin-top: 8px; }
+    input, button, select {
       width: 100%; background: transparent; border: 1px solid #00f2ff; color: #00f2ff;
       padding: 8px; border-radius: 6px; font-family: inherit; font-size: 12px;
     }
     button { cursor: pointer; }
     button:hover { background: #00f2ff; color: #0a0a1a; }
-    #log { margin-top: 10px; max-height: 120px; overflow: auto; font-size: 11px; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.btn-warn { border-color: #ff8c00; color: #ff8c00; }
+    button.btn-warn:hover { background: #ff8c00; color: #0a0a1a; }
+    button.btn-ok { border-color: #00ff88; color: #00ff88; }
+    button.btn-ok:hover { background: #00ff88; color: #0a0a1a; }
+    #log { margin-top: 10px; max-height: 100px; overflow: auto; font-size: 11px; }
     #log div { margin-bottom: 4px; color: #8deaff; }
-    #ai-config { margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25); padding-top: 10px; }
-    #ai-config h4 { font-size: 12px; margin-bottom: 6px; }
-    #ai-config .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.3; }
+    #log div.ok  { color: #00ff88; }
+    #log div.err { color: #ff4d4d; }
+    .section {
+      margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25);
+      padding-top: 10px;
+    }
+    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; }
+    .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.4; }
+    .status-dot {
+      display: inline-block; width: 7px; height: 7px;
+      border-radius: 50%; margin-right: 5px; vertical-align: middle;
+    }
+    .status-dot.connected { background: #00ff88; box-shadow: 0 0 5px #00ff88; }
+    .status-dot.disconnected { background: #ff4d4d; }
+    .status-dot.pending { background: #ff8c00; animation: blink .8s step-end infinite; }
+    #diag-status, #fb-status { font-size: 11px; color: #8deaff; margin-top: 6px; min-height: 14px; }
+    #fb-status { margin-top: 4px; }
+    @keyframes blink { 50% { opacity: 0; } }
   </style>
 </head>
 <body>
   <canvas id="canvas"></canvas>
+
   <aside id="ui">
     <h3>🧠 SPORE NLWS</h3>
     <div class="stat"><span>Phase</span><span id="phase">Initialization</span></div>
@@ -40,20 +66,130 @@
     <div class="stat"><span>Synapses</span><span id="synapses">5</span></div>
     <div class="stat"><span>Knowledge</span><span id="knowledge">0.0 MB</span></div>
     <div class="progress"><div id="progress"></div></div>
+
     <div class="row"><button id="general">Learn General</button><button id="pause">Pause/Resume</button></div>
     <div class="row"><input id="topic" placeholder="topic e.g. quantum computing" /></div>
     <div class="row"><button id="specialize">Specialize Topic</button><button id="ask">Ask</button></div>
-    <section id="ai-config">
+
+    <!-- ── AI Model Config ─────────────────────────────── -->
+    <section class="section" id="ai-config">
       <h4>AI Model Config (Search/Crawl)</h4>
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
-      <div class="row"><input id="ai-model" placeholder="Model ID" /></div>
-      <div class="row"><input id="ai-base-url" placeholder="Base URL" /></div>
+      <div class="row"><input id="ai-model" placeholder="Model ID (e.g. gpt-4o-mini)" /></div>
+      <div class="row"><input id="ai-base-url" placeholder="Base URL (leave blank for OpenAI)" /></div>
       <div class="row"><input id="ai-api-key" placeholder="API Key" type="password" /></div>
       <div class="row"><button id="save-ai-config">Save Config</button></div>
-      <p class="hint">Stored locally for now. Runtime usage lives in backend CLI via <code>ai config</code>.</p>
+      <p class="hint">Saved locally &amp; to Firebase (when connected). Backend CLI: <code>ai config</code></p>
     </section>
+
+    <!-- ── Diagnostics ────────────────────────────────── -->
+    <section class="section" id="diagnostics">
+      <h4>Diagnostics</h4>
+      <div class="row">
+        <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
+        <button id="test-search" class="btn-warn">🔍 Test Search</button>
+      </div>
+      <div id="diag-status"></div>
+      <p class="hint">Requires <code>server.py</code> running on <code>localhost:8000</code></p>
+    </section>
+
+    <!-- ── Firebase API Key Storage ───────────────────── -->
+    <section class="section" id="firebase-section">
+      <h4>🔥 Firebase Key Storage</h4>
+      <div class="row"><input id="fb-api-key" placeholder="Firebase API Key" type="password" /></div>
+      <div class="row"><input id="fb-project-id" placeholder="Firebase Project ID" /></div>
+      <div class="row"><input id="fb-app-id" placeholder="Firebase App ID" /></div>
+      <div class="row">
+        <button id="fb-connect">Connect Firebase</button>
+      </div>
+      <div class="row">
+        <button id="fb-push" disabled>⬆ Push Keys</button>
+        <button id="fb-pull" disabled>⬇ Pull Keys</button>
+      </div>
+      <div id="fb-status"><span class="status-dot disconnected"></span>Not connected</div>
+      <p class="hint">
+        Stores AI API keys in Firestore (<code>spore_config/api_keys</code>).
+        SPORE's knowledge graph stays local for privacy.
+      </p>
+    </section>
+
     <div id="log"></div>
   </aside>
+
+  <!-- ─────────────────────────────────────────────────── -->
+  <!-- Firebase modular SDK (dynamic import at runtime)   -->
+  <!-- ─────────────────────────────────────────────────── -->
+  <script type="module">
+    // Expose a minimal Firebase helper on window so the main (non-module)
+    // script can call it after the user provides credentials.
+    window._fb = {
+      db: null,
+      _app: null,
+
+      async connect(apiKey, projectId, appId) {
+        try {
+          const { initializeApp, getApps, deleteApp } = await import(
+            "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
+          );
+          const { getFirestore, doc, getDoc, setDoc } = await import(
+            "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+          );
+
+          // Re-initialise if already connected with different config.
+          if (this._app) {
+            await deleteApp(this._app);
+            this._app = null;
+            this.db = null;
+          }
+
+          this._app = initializeApp(
+            { apiKey, projectId, appId, authDomain: `${projectId}.firebaseapp.com` },
+            `spore-${Date.now()}`
+          );
+          this.db = getFirestore(this._app);
+
+          // Store Firestore helpers on the instance so other methods can use them.
+          this._docFn  = doc;
+          this._getFn  = getDoc;
+          this._setFn  = setDoc;
+
+          // Quick connectivity probe — write a harmless ping document.
+          const ref = this._docFn(this.db, "spore_config", "ping");
+          await this._setFn(ref, { ts: Date.now() }, { merge: true });
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: err.message };
+        }
+      },
+
+      async pushKeys(aiName, aiModelId, aiBaseUrl, aiApiKey) {
+        if (!this.db) return { ok: false, error: "Not connected" };
+        try {
+          const ref = this._docFn(this.db, "spore_config", "api_keys");
+          await this._setFn(ref, { aiName, aiModelId, aiBaseUrl, aiApiKey, updatedAt: Date.now() });
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: err.message };
+        }
+      },
+
+      async pullKeys() {
+        if (!this.db) return { ok: false, error: "Not connected" };
+        try {
+          const ref = this._docFn(this.db, "spore_config", "api_keys");
+          const snap = await this._getFn(ref);
+          if (!snap.exists()) return { ok: true, data: null };
+          return { ok: true, data: snap.data() };
+        } catch (err) {
+          return { ok: false, error: err.message };
+        }
+      },
+    };
+  </script>
+
+  <!-- ─────────────────────────────────────────────────── -->
+  <!-- Main application script                            -->
+  <!-- ─────────────────────────────────────────────────── -->
   <script>
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -64,6 +200,10 @@
     let isLearning = false;
     let learningProgress = 0;
 
+    // ── Backend server base URL ──────────────────────────
+    const API = "http://localhost:8000";
+
+    // ── Neuron ───────────────────────────────────────────
     class Neuron {
       constructor(concept, x, y, layer) {
         this.concept = concept;
@@ -91,12 +231,10 @@
         ctx.beginPath();
         ctx.arc(this.x, this.y, glow, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.fillStyle = "#00f2ff";
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.fillStyle = "#fff";
         ctx.font = "10px Courier New";
         ctx.textAlign = "center";
@@ -108,6 +246,7 @@
       }
     }
 
+    // ── Synapse ──────────────────────────────────────────
     class Synapse {
       constructor(a, b) {
         this.a = a;
@@ -118,10 +257,7 @@
       update() {
         if (this.signal >= 0) {
           this.signal += 0.03;
-          if (this.signal > 1) {
-            this.signal = -1;
-            this.b.activate();
-          }
+          if (this.signal > 1) { this.signal = -1; this.b.activate(); }
         }
       }
       draw() {
@@ -131,7 +267,6 @@
         ctx.moveTo(this.a.x, this.a.y);
         ctx.lineTo(this.b.x, this.b.y);
         ctx.stroke();
-
         if (this.signal >= 0) {
           const x = this.a.x + (this.b.x - this.a.x) * this.signal;
           const y = this.a.y + (this.b.y - this.a.y) * this.signal;
@@ -147,6 +282,7 @@
       }
     }
 
+    // ── Particle ─────────────────────────────────────────
     class Particle {
       constructor(x, y) {
         this.x = x; this.y = y;
@@ -163,6 +299,7 @@
       }
     }
 
+    // ── Canvas / render ──────────────────────────────────
     function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
     addEventListener("resize", resize);
 
@@ -189,12 +326,13 @@
       document.getElementById("progress").style.width = `${learningProgress}%`;
     }
 
-    function log(message) {
+    function log(message, type = "") {
       const row = document.createElement("div");
       row.textContent = `> ${message}`;
+      if (type) row.className = type;
       const logEl = document.getElementById("log");
       logEl.prepend(row);
-      while (logEl.children.length > 12) logEl.removeChild(logEl.lastChild);
+      while (logEl.children.length > 15) logEl.removeChild(logEl.lastChild);
     }
 
     function grow(concept, parent) {
@@ -217,12 +355,10 @@
       const source = neurons[Math.floor(Math.random() * neurons.length)];
       source.activate();
       synapses.forEach(s => { if (s.a === source && Math.random() > 0.5) s.transmit(); });
-
       if (Math.random() > 0.98 && neurons.length < 180) {
-        const vocab = ["Pattern", "Signal", "Reference", "Meaning", "Vector", "Node", "Context"]; 
+        const vocab = ["Pattern", "Signal", "Reference", "Meaning", "Vector", "Node", "Context"];
         grow(vocab[Math.floor(Math.random() * vocab.length)] + "_" + neurons.length, source);
       }
-
       learningProgress = Math.min(100, learningProgress + 0.15);
       syncUI();
     }
@@ -230,20 +366,14 @@
     function render() {
       ctx.fillStyle = "rgba(10,10,26,0.22)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       synapses.forEach(s => { s.update(); s.draw(); });
       neurons.forEach(n => { n.update(); n.draw(); });
-
-      particles = particles.filter(p => {
-        p.update();
-        p.draw();
-        return p.life > 0;
-      });
-
+      particles = particles.filter(p => { p.update(); p.draw(); return p.life > 0; });
       if (isLearning && Math.random() > 0.94) simulateStep();
       requestAnimationFrame(render);
     }
 
+    // ── Learning controls ────────────────────────────────
     document.getElementById("general").onclick = () => {
       isLearning = true;
       document.getElementById("phase").textContent = "General Language";
@@ -255,8 +385,7 @@
       if (!topic) return alert("Please enter a topic first");
       isLearning = true;
       document.getElementById("phase").textContent = `Topic: ${topic}`;
-      const hub = grow(topic, neurons[0]);
-      hub.activate();
+      grow(topic, neurons[0]).activate();
       log(`Specializing in topic: ${topic}`);
     };
 
@@ -268,41 +397,160 @@
     document.getElementById("ask").onclick = () => {
       const q = prompt("Enter your question");
       if (!q) return;
-      const terms = q.toLowerCase().split(/\s+/);
       let hits = 0;
       neurons.forEach(n => {
-        if (terms.some(t => n.concept.toLowerCase().includes(t))) {
-          n.activate();
-          hits += 1;
+        if (q.toLowerCase().split(/\s+/).some(t => n.concept.toLowerCase().includes(t))) {
+          n.activate(); hits++;
         }
       });
       log(hits ? `Activated ${hits} nodes for question` : "No relevant nodes yet; continue learning");
     };
 
-    function loadAiConfigForm() {
+    // ── AI Config – save to localStorage + backend server ─
+    function getAiConfigFromForm() {
+      return {
+        name:     document.getElementById("ai-name").value.trim(),
+        model_id: document.getElementById("ai-model").value.trim(),
+        base_url: document.getElementById("ai-base-url").value.trim(),
+        api_key:  document.getElementById("ai-api-key").value.trim(),
+      };
+    }
+
+    function applyAiConfigToForm(cfg) {
+      document.getElementById("ai-name").value     = cfg.aiName     || cfg.name     || "";
+      document.getElementById("ai-model").value    = cfg.aiModelId  || cfg.model_id || "";
+      document.getElementById("ai-base-url").value = cfg.aiBaseUrl  || cfg.base_url || "";
+      document.getElementById("ai-api-key").value  = cfg.aiApiKey   || cfg.api_key  || "";
+    }
+
+    function loadAiConfigFromStorage() {
       const raw = localStorage.getItem("sporeAiConfig");
       if (!raw) return;
+      try { applyAiConfigToForm(JSON.parse(raw)); } catch (_) {}
+    }
+
+    document.getElementById("save-ai-config").onclick = async () => {
+      const cfg = getAiConfigFromForm();
+      localStorage.setItem("sporeAiConfig", JSON.stringify(cfg));
+
+      // Persist to backend server (non-blocking).
       try {
-        const config = JSON.parse(raw);
-        document.getElementById("ai-name").value = config.name || "";
-        document.getElementById("ai-model").value = config.modelId || "";
-        document.getElementById("ai-base-url").value = config.baseUrl || "";
-        document.getElementById("ai-api-key").value = config.apiKey || "";
+        await fetch(`${API}/api/config`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(cfg),
+        });
+        log("Config saved (local + server)");
+      } catch (_) {
+        log("Config saved locally (server unreachable)");
+      }
+
+      // If Firebase is connected, push keys there too.
+      if (window._fb && window._fb.db) {
+        const res = await window._fb.pushKeys(cfg.name, cfg.model_id, cfg.base_url, cfg.api_key);
+        log(res.ok ? "Keys synced to Firebase" : `Firebase sync failed: ${res.error}`, res.ok ? "ok" : "err");
+      }
+    };
+
+    // ── Diagnostics ──────────────────────────────────────
+    async function runDiagnostic(endpoint, label, statusEl) {
+      statusEl.textContent = `Testing ${label}…`;
+      try {
+        const res  = await fetch(`${API}${endpoint}`);
+        const data = await res.json();
+        const icon = data.ok ? "✅" : "❌";
+        statusEl.innerHTML = `${icon} <strong>${label}:</strong> ${data.message}`;
+        log(`${icon} ${label}: ${data.message}`, data.ok ? "ok" : "err");
+      } catch (err) {
+        statusEl.innerHTML = `❌ <strong>${label}:</strong> ${err.message} — is server.py running?`;
+        log(`❌ ${label}: ${err.message}`, "err");
+      }
+    }
+
+    document.getElementById("test-ai").onclick = () => {
+      runDiagnostic("/api/test/ai", "AI Model", document.getElementById("diag-status"));
+    };
+
+    document.getElementById("test-search").onclick = () => {
+      runDiagnostic("/api/test/search", "Search", document.getElementById("diag-status"));
+    };
+
+    // ── Firebase ─────────────────────────────────────────
+    function setFirebaseStatus(connected, label) {
+      const el = document.getElementById("fb-status");
+      const dot = `<span class="status-dot ${connected ? "connected" : "disconnected"}"></span>`;
+      el.innerHTML = `${dot}${label}`;
+      document.getElementById("fb-push").disabled = !connected;
+      document.getElementById("fb-pull").disabled = !connected;
+    }
+
+    function loadFirebaseConfigFromStorage() {
+      const raw = localStorage.getItem("sporeFirebaseConfig");
+      if (!raw) return;
+      try {
+        const fb = JSON.parse(raw);
+        document.getElementById("fb-api-key").value    = fb.apiKey    || "";
+        document.getElementById("fb-project-id").value = fb.projectId || "";
+        document.getElementById("fb-app-id").value     = fb.appId     || "";
       } catch (_) {}
     }
 
-    document.getElementById("save-ai-config").onclick = () => {
-      const config = {
-        name: document.getElementById("ai-name").value.trim(),
-        modelId: document.getElementById("ai-model").value.trim(),
-        baseUrl: document.getElementById("ai-base-url").value.trim(),
-        apiKey: document.getElementById("ai-api-key").value.trim(),
-      };
-      localStorage.setItem("sporeAiConfig", JSON.stringify(config));
-      log("Saved AI model config spot (backend uses CLI: ai config / ai test)");
+    document.getElementById("fb-connect").onclick = async () => {
+      const apiKey    = document.getElementById("fb-api-key").value.trim();
+      const projectId = document.getElementById("fb-project-id").value.trim();
+      const appId     = document.getElementById("fb-app-id").value.trim();
+
+      if (!apiKey || !projectId || !appId) {
+        setFirebaseStatus(false, "Fill in all three Firebase fields");
+        return;
+      }
+
+      const dot = document.querySelector("#fb-status .status-dot");
+      if (dot) dot.className = "status-dot pending";
+      document.getElementById("fb-status").innerHTML =
+        '<span class="status-dot pending"></span>Connecting…';
+
+      // _fb is set by the module script above.
+      if (!window._fb) {
+        setFirebaseStatus(false, "Firebase SDK not loaded");
+        return;
+      }
+
+      const res = await window._fb.connect(apiKey, projectId, appId);
+      if (res.ok) {
+        localStorage.setItem("sporeFirebaseConfig", JSON.stringify({ apiKey, projectId, appId }));
+        setFirebaseStatus(true, `Connected — ${projectId}`);
+        log("Firebase connected", "ok");
+      } else {
+        setFirebaseStatus(false, `Connection failed: ${res.error}`);
+        log(`Firebase error: ${res.error}`, "err");
+      }
     };
 
-    loadAiConfigForm();
+    document.getElementById("fb-push").onclick = async () => {
+      const cfg = getAiConfigFromForm();
+      const res = await window._fb.pushKeys(cfg.name, cfg.model_id, cfg.base_url, cfg.api_key);
+      log(res.ok ? "Keys pushed to Firebase" : `Push failed: ${res.error}`, res.ok ? "ok" : "err");
+    };
+
+    document.getElementById("fb-pull").onclick = async () => {
+      const res = await window._fb.pullKeys();
+      if (!res.ok) { log(`Pull failed: ${res.error}`, "err"); return; }
+      if (!res.data) { log("No keys stored in Firebase yet"); return; }
+      applyAiConfigToForm(res.data);
+      localStorage.setItem("sporeAiConfig", JSON.stringify({
+        name:     res.data.aiName,
+        model_id: res.data.aiModelId,
+        base_url: res.data.aiBaseUrl,
+        api_key:  res.data.aiApiKey,
+      }));
+      log("Keys pulled from Firebase", "ok");
+    };
+
+    // ── Startup ──────────────────────────────────────────
+    loadAiConfigFromStorage();
+    loadFirebaseConfigFromStorage();
+    setFirebaseStatus(false, "Not connected");
     boot();
   </script>
 </body>
