@@ -1662,8 +1662,8 @@
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
       const choice = data.choices?.[0];
       const content = (choice?.message?.content || "").trim();
-      if (!content && choice?.finish_reason && choice.finish_reason !== "stop") {
-        throw new Error(`AI returned empty content (finish_reason: ${choice.finish_reason})`);
+      if (!content && choice?.finish_reason === "content_filter") {
+        throw new Error("AI returned empty content (finish_reason: content_filter) — content may have been blocked by the model's safety policy");
       }
       return content;
     }
@@ -1941,7 +1941,7 @@
         let question = await aiCall([
           { role: "system", content: `You are a curriculum designer for SPORE, an AI learning natural language from scratch. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.` },
           { role: "user",   content: "Generate the next training question." },
-        ], 60);
+        ], 120);
         if (!question) throw new Error("AI returned empty question — check model config");
         document.getElementById("ts-question").textContent = question;
         tsShowBlock("ts-q-block");
@@ -1949,15 +1949,22 @@
         // ── 2. AI generates a search query ─────────────────
         tsStatus("🔎 Generating search query…");
         let searchQ = await aiCall([
-          { role: "system", content: "Convert the following question into a concise web search query (3-6 words). Return only the query string." },
+          { role: "system", content: "Convert the following question into a concise, specific web search query of 3-5 keywords likely to return encyclopedia or reference results. Return only the query string, no punctuation." },
           { role: "user",   content: question },
-        ], 20);
+        ], 40);
         if (!searchQ) searchQ = question.split(/\s+/).slice(0, 5).join(" ");
 
         // ── 3. DDG search → context neurons (amber) ────────
         tsStatus(`🌐 Searching: "${searchQ}"…`);
-        const results = await ddgSearch(searchQ);
-        const top     = results.slice(0, 3);
+        let results = await ddgSearch(searchQ);
+        // Retry with first 3 words of question if initial query yields nothing
+        if (!results.length && searchQ !== question) {
+          const fallbackQ = question.split(/\s+/).slice(0, 3).join(" ");
+          tsStatus(`🌐 No results — retrying: "${fallbackQ}"…`);
+          log(`⚠ No DDG results for "${searchQ}" — retrying with "${fallbackQ}"`, "warn");
+          results = await ddgSearch(fallbackQ);
+        }
+        const top = results.slice(0, 3);
         if (!top.length) throw new Error("DuckDuckGo returned no results");
 
         const ctxHtml = top.map(r => `<div class="ts-source">• ${r.title.slice(0, 52)}</div>`).join("");
@@ -2119,10 +2126,16 @@ Reply ONLY with this JSON (no other text):
             ? "Generate the next training question."
             : "The previous attempt returned empty or a duplicate. Generate a completely different training question on a new angle or subtopic.";
           tsStatus(`⚗ [Distill] Level ${currentLevel} question… (attempt ${attempt}/${MAX_Q_ATTEMPTS})`);
-          question = await aiCall([
-            { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
-            { role: "user",   content: userMsg },
-          ], 60);
+          try {
+            question = await aiCall([
+              { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
+              { role: "user",   content: userMsg },
+            ], 120);
+          } catch (aiErr) {
+            if (attempt === MAX_Q_ATTEMPTS) throw aiErr;
+            log(`⚠ AI error on attempt ${attempt}: ${aiErr.message} — retrying…`, "warn");
+            continue;
+          }
           if (!question) {
             if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned empty question after 3 attempts — check model config (API key, model ID, and content policy)");
             log(`⚠ Empty question on attempt ${attempt}, retrying…`, "warn");
