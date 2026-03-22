@@ -182,8 +182,11 @@
     let learningProgress = 0;
 
     // ── Backend server base URL (search test only) ───────
-    const DEFAULT_API = "http://localhost:8000";
-    const getAPI = () => DEFAULT_API;
+    // When served by server.py, use same origin to avoid CORS errors.
+    const getAPI = () =>
+      (window.location.protocol !== "file:" && window.location.hostname)
+        ? window.location.origin
+        : "http://localhost:8000";
 
     // ── AI provider presets (Find ⟳ cycles through these) ─
     const AI_PRESETS = [
@@ -631,8 +634,12 @@
         statusEl.innerHTML = `${icon} <strong>Search:</strong> ${data.message}`;
         log(`${icon} Search (${data.provider}): ${data.message}`, data.ok ? "ok" : "err");
       } catch (err) {
-        statusEl.innerHTML = `❌ <strong>Search:</strong> server.py not running at ${getAPI()}`;
-        log(`❌ Search: server.py unreachable at ${getAPI()}`, "err");
+        const isFile = window.location.protocol === "file:";
+        const hint   = isFile
+          ? "Open via <strong>http://localhost:8000</strong> (not as a file) — run <code>python server.py</code> then visit that URL"
+          : `server.py not running at ${getAPI()} — run <code>python server.py</code>`;
+        statusEl.innerHTML = `❌ <strong>Search:</strong> ${hint}`;
+        log(`❌ Search: ${isFile ? "page opened as file://, must use http://localhost:8000" : "server.py unreachable"}`, "err");
       }
     }
 
