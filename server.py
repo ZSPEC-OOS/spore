@@ -92,6 +92,12 @@ class AIConfigRequest(BaseModel):
     api_key: Optional[str] = ""
 
 
+class ProbeRequest(BaseModel):
+    model_id: str
+    base_url: str
+    api_key: str
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -115,6 +121,20 @@ async def save_config(req: AIConfigRequest):
     )
     _save_config(config)
     return {"status": "saved", "config": config.as_display_dict()}
+
+
+@app.post("/api/test/ai/probe")
+async def probe_ai(req: ProbeRequest):
+    """Test a specific base_url + model_id without touching saved config."""
+    config = AIModelConfig(
+        name="probe",
+        model_id=req.model_id.strip(),
+        base_url=req.base_url.strip(),
+        api_key=req.api_key.strip(),
+    )
+    client = ExternalAIClient(config)
+    ok, message = await client.test_connection()
+    return {"ok": ok, "message": message, "baseUrl": req.base_url, "modelId": req.model_id}
 
 
 @app.get("/api/test/ai")

@@ -467,15 +467,80 @@
       log(`Backend URL set to ${val || DEFAULT_API}`);
     });
 
-    // ── Find button — cycle all provider presets ─────────
-    document.getElementById("find-url").onclick = () => {
-      const preset = AI_PRESETS[presetIndex % AI_PRESETS.length];
-      presetIndex++;
-      document.getElementById("ai-base-url").value = preset.baseUrl;
-      if (preset.modelId) document.getElementById("ai-model").value = preset.modelId;
-      document.getElementById("kimi-label").textContent =
-        `[${presetIndex}/${AI_PRESETS.length}] ${preset.label}${preset.modelId ? "" : " — enter model ID"}`;
-      log(`Preset: ${preset.label}${preset.modelId ? " — " + preset.modelId : ""}`);
+    // ── Find button — auto-probe all base URLs for a model ─
+    let isScanning = false;
+
+    document.getElementById("find-url").onclick = async () => {
+      if (isScanning) return;
+
+      const modelId = document.getElementById("ai-model").value.trim();
+      const apiKey  = document.getElementById("ai-api-key").value.trim();
+      const label   = document.getElementById("kimi-label");
+
+      // No model ID — fall back to manual cycle through all presets.
+      if (!modelId) {
+        const preset = AI_PRESETS[presetIndex % AI_PRESETS.length];
+        presetIndex++;
+        document.getElementById("ai-base-url").value = preset.baseUrl;
+        document.getElementById("ai-model").value    = preset.modelId || document.getElementById("ai-model").value;
+        label.textContent = `[${presetIndex}/${AI_PRESETS.length}] ${preset.label}${preset.modelId ? "" : " — enter model ID"}`;
+        log(`Preset: ${preset.label}${preset.modelId ? " — " + preset.modelId : ""}`);
+        return;
+      }
+
+      // Collect candidate base URLs: presets matching this model ID first,
+      // then all other unique base URLs not already included.
+      const matched   = AI_PRESETS.filter(p => p.modelId === modelId);
+      const matchUrls = [...new Set(matched.map(p => p.baseUrl))];
+      const otherUrls = [...new Set(AI_PRESETS.map(p => p.baseUrl))].filter(u => !matchUrls.includes(u));
+      const candidates = [...matchUrls, ...otherUrls];
+
+      if (!apiKey) {
+        label.textContent = "⚠ Enter API Key before scanning";
+        log("Auto-scan needs an API key to probe endpoints", "err");
+        return;
+      }
+
+      isScanning = true;
+      document.getElementById("find-url").textContent = "Scanning…";
+      document.getElementById("find-url").disabled = true;
+      label.textContent = `Probing ${candidates.length} base URLs…`;
+      log(`Auto-scanning ${candidates.length} URLs for model: ${modelId}`);
+
+      let found = null;
+      for (let i = 0; i < candidates.length; i++) {
+        const url = candidates[i];
+        const shortUrl = url.replace("https://", "").replace("/v1", "");
+        label.textContent = `[${i + 1}/${candidates.length}] Testing ${shortUrl}…`;
+        try {
+          const res  = await fetch(`${getAPI()}/api/test/ai/probe`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model_id: modelId, base_url: url, api_key: apiKey }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            document.getElementById("ai-base-url").value = url;
+            label.textContent = `✅ [${i + 1}/${candidates.length}] ${shortUrl}`;
+            log(`✅ Found: ${shortUrl} — ${data.message}`, "ok");
+            found = url;
+            break;
+          } else {
+            log(`❌ ${shortUrl}: ${data.message}`, "err");
+          }
+        } catch (err) {
+          log(`❌ ${shortUrl}: ${err.message}`, "err");
+        }
+      }
+
+      if (!found) {
+        label.textContent = `❌ No working URL found for ${modelId}`;
+        log(`No working base URL found for ${modelId}`, "err");
+      }
+
+      isScanning = false;
+      document.getElementById("find-url").textContent = "Find ⟳";
+      document.getElementById("find-url").disabled = false;
     };
 
     document.getElementById("save-ai-config").onclick = async () => {
