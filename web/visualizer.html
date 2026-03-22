@@ -725,40 +725,66 @@
       syncUI();
     }
 
-    // ── DuckDuckGo Instant Answer search (browser-native, no server) ──
-    async function ddgSearch(query) {
-      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
-      const res  = await fetch(url);
-      const data = await res.json();
-      const out  = [];
+    // ── Rate limiters — shared across all DDG and AI calls ───
+    // DDG: ≤14/min (safe under 15/min guideline) → 4.3 s gap
+    // AI : ≤18/min (safe under 20 RPM limit)     → 3.4 s gap
+    const ddgLimiter = { last: 0, gap: 4300 };
+    const aiLimiter  = { last: 0, gap: 3400 };
 
-      if (data.AbstractText && data.AbstractURL) {
-        out.push({ title: data.Heading || query, url: data.AbstractURL, snippet: data.AbstractText });
+    async function rateWait(limiter, label) {
+      const wait = limiter.gap - (Date.now() - limiter.last);
+      if (wait > 0) {
+        log(`⏳ Rate-limit: waiting ${(wait / 1000).toFixed(1)}s (${label})…`);
+        await new Promise(r => setTimeout(r, wait));
       }
-      for (const r of data.Results || []) {
-        if (r.FirstURL) out.push({ title: r.Text || query, url: r.FirstURL, snippet: r.Text || "" });
-      }
-      for (const t of data.RelatedTopics || []) {
-        if (t.Text && t.FirstURL && !t.Topics) {
-          const dash = t.Text.indexOf(" - ");
-          out.push({
-            title:   dash > -1 ? t.Text.slice(0, dash) : t.Text.slice(0, 50),
-            url:     t.FirstURL,
-            snippet: dash > -1 ? t.Text.slice(dash + 3) : t.Text,
-          });
-        }
-        for (const sub of t.Topics || []) {
-          if (sub.Text && sub.FirstURL) {
-            const dash = sub.Text.indexOf(" - ");
-            out.push({
-              title:   dash > -1 ? sub.Text.slice(0, dash) : sub.Text.slice(0, 50),
-              url:     sub.FirstURL,
-              snippet: dash > -1 ? sub.Text.slice(dash + 3) : sub.Text,
-            });
+      limiter.last = Date.now();
+    }
+
+    // ── DuckDuckGo Instant Answer search — robust with retry ─
+    async function ddgSearch(query) {
+      await rateWait(ddgLimiter, "DDG");
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1&skip_disambig=1&t=spore`;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const out  = [];
+
+          if (data.AbstractText && data.AbstractURL)
+            out.push({ title: data.Heading || query, url: data.AbstractURL, snippet: data.AbstractText });
+          for (const r of data.Results || [])
+            if (r.FirstURL) out.push({ title: r.Text || query, url: r.FirstURL, snippet: r.Text || "" });
+          for (const t of data.RelatedTopics || []) {
+            if (t.Text && t.FirstURL && !t.Topics) {
+              const d = t.Text.indexOf(" - ");
+              out.push({ title: d > -1 ? t.Text.slice(0, d) : t.Text.slice(0, 50), url: t.FirstURL,
+                snippet: d > -1 ? t.Text.slice(d + 3) : t.Text });
+            }
+            for (const sub of t.Topics || []) {
+              if (sub.Text && sub.FirstURL) {
+                const d = sub.Text.indexOf(" - ");
+                out.push({ title: d > -1 ? sub.Text.slice(0, d) : sub.Text.slice(0, 50), url: sub.FirstURL,
+                  snippet: d > -1 ? sub.Text.slice(d + 3) : sub.Text });
+              }
+            }
+          }
+          if (!out.length) { log(`DDG: no structured results for "${query}" — skipping`, "warn"); return []; }
+          return out.slice(0, 8);
+
+        } catch (err) {
+          if (attempt < 2) {
+            const backoff = (attempt + 1) * 6000;
+            log(`DDG error (retry ${attempt + 1} in ${backoff / 1000}s): ${err.message}`, "warn");
+            await new Promise(r => setTimeout(r, backoff));
+          } else {
+            log(`DDG failed after 3 attempts: ${err.message}`, "err");
+            return [];
           }
         }
       }
-      return out.slice(0, 8);
+      return [];
     }
 
     // Grow neurons from real search results
@@ -792,12 +818,40 @@
     }
 
     // ── Learning controls ────────────────────────────────
+    // Graduated curriculum: greetings → personal → concepts → reasoning → abstract.
+    // These are factual DDG-searchable topics that build SPORE's conversational
+    // language foundation from the ground up.
     const GENERAL_QUERIES = [
-      "conversation patterns natural language",
-      "understanding user intent questions",
-      "context clues meaning in text",
-      "tone and sentiment in writing",
-      "knowledge representation concepts",
+      // Level 1 — greetings, identity, basic courtesy
+      "greeting phrases hello goodbye meaning origin",
+      "how are you wellbeing phrases social meaning",
+      "introducing yourself name identity phrases",
+      "thank you please courtesy polite language",
+      "yes no agreement disagreement language basics",
+      // Level 2 — feelings, family, everyday life
+      "feelings emotions happy sad vocabulary meaning",
+      "family members relationships vocabulary",
+      "food drink names common everyday vocabulary",
+      "colors shapes adjective descriptive words",
+      "daily routine morning evening activities language",
+      // Level 3 — knowledge and concepts
+      "weather seasons climate description language",
+      "time date past present future tense language",
+      "animals nature environment vocabulary",
+      "numbers mathematics counting language",
+      "places travel directions location vocabulary",
+      // Level 4 — opinions, reasoning, comparison
+      "expressing opinion preference like dislike language",
+      "cause effect because therefore reasoning words",
+      "compare contrast difference similarity language",
+      "problem solution asking help language phrases",
+      "possibility probability maybe perhaps language",
+      // Level 5 — abstract and complex
+      "abstract concepts ideas beliefs language",
+      "metaphor analogy figurative language examples",
+      "argumentation persuasion logic language patterns",
+      "ethics morality right wrong human concepts",
+      "knowledge learning understanding intelligence concepts",
     ];
 
     document.getElementById("general").onclick = async () => {
@@ -1236,6 +1290,7 @@
 
     // ── Generic AI call helper ────────────────────────────
     async function aiCall(messages, maxTokens = 200) {
+      await rateWait(aiLimiter, "AI");
       const cfg = getAiConfigFromForm();
       let base  = (cfg.base_url || "https://api.openai.com/v1").trim().replace(/\/$/, "");
       if (!/^https?:\/\//i.test(base)) base = "https://" + base;
@@ -1325,10 +1380,17 @@
         .forEach(id => { document.getElementById(id).style.display = "none"; });
 
       try {
-        // ── 1. AI generates a question ─────────────────────
+        // ── 1. AI generates a question (complexity rises with cycle count) ──
         tsStatus("🤔 Generating question…");
+        const complexityLevel = (() => {
+          if (tsCycles <  5) return "ONLY very basic greeting or identity questions, such as 'How are you?', 'What is your name?', 'Where are you from?', 'How old are you?'. These must be simple enough for a first conversation.";
+          if (tsCycles < 15) return "simple personal questions about feelings, preferences, or daily life, such as 'What is your favourite colour?', 'Do you like music?', 'What did you do today?'";
+          if (tsCycles < 30) return "questions about everyday concepts and knowledge, such as 'What causes rain?', 'How do plants grow?', 'What is a computer?'";
+          if (tsCycles < 60) return "analytical questions that require reasoning or comparison, such as 'Why do people make friends?', 'What are the differences between day and night?', 'How does learning work?'";
+          return "complex abstract or philosophical questions, such as 'What does it mean to understand something?', 'Can a machine have feelings?', 'What is the nature of knowledge?'";
+        })();
         let question = await aiCall([
-          { role: "system", content: "You are a curriculum designer for SPORE, an AI that learns from web sources. Generate ONE clear, open-ended question on any topic SPORE can research. Return only the question, nothing else." },
+          { role: "system", content: `You are a curriculum designer for SPORE, an AI learning natural language. Generate ${complexityLevel} Return ONLY the question text, nothing else.` },
           { role: "user",   content: "Generate the next training question." },
         ], 60);
         if (!question) throw new Error("AI returned empty question — check model config");
@@ -1441,9 +1503,10 @@ Reply ONLY with this JSON (no other text):
         clearCtxPool();
       }
 
-      // Schedule next cycle
+      // Schedule next cycle — rate limiters (DDG 4.3s, AI 3.4s) handle pacing;
+      // this small gap is just breathing room between cycles.
       if (isTraining) {
-        await new Promise(r => setTimeout(r, 2500));
+        await new Promise(r => setTimeout(r, 1000));
         if (isTraining) runTrainingCycle();
       } else {
         const badge = document.getElementById("ts-live-badge");
