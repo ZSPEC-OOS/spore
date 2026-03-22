@@ -89,13 +89,16 @@
     <!-- ── Diagnostics ────────────────────────────────── -->
     <section class="section" id="diagnostics">
       <h4>Diagnostics</h4>
-      <div class="row"><input id="server-url" placeholder="Backend URL (e.g. http://localhost:8000)" /></div>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
         <button id="test-search" class="btn-warn">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">Backend URL is saved to localStorage. Run <code>python server.py</code> to start.</p>
+      <p class="hint">
+        AI test calls your provider directly — no server needed.<br>
+        Search test requires <code>python server.py</code>
+        at <input id="server-url" placeholder="http://localhost:8000" style="width:160px;display:inline-block;padding:3px 6px;font-size:10px;margin-top:4px" />.
+      </p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -518,20 +521,32 @@
         const shortUrl = url.replace("https://", "").replace("/v1", "");
         label.textContent = `[${i + 1}/${candidates.length}] Testing ${shortUrl}…`;
         try {
-          const res  = await fetch(`${getAPI()}/api/test/ai/probe`, {
+          const res  = await fetch(`${url.replace(/\/$/, "")}/chat/completions`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model_id: modelId, base_url: url, api_key: apiKey }),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                { role: "system", content: "You validate API connectivity." },
+                { role: "user",   content: "Reply with exactly: OK" },
+              ],
+              max_tokens: 5,
+              temperature: 0,
+            }),
           });
           const data = await res.json();
-          if (data.ok) {
+          if (!data.error && data.choices?.[0]?.message?.content) {
             document.getElementById("ai-base-url").value = url;
             label.textContent = `✅ [${i + 1}/${candidates.length}] ${shortUrl}`;
-            log(`✅ Found: ${shortUrl} — ${data.message}`, "ok");
+            log(`✅ Found: ${shortUrl} — "${data.choices[0].message.content}"`, "ok");
             found = url;
             break;
           } else {
-            log(`❌ ${shortUrl}: ${data.message}`, "err");
+            const msg = data.error?.message || "no valid response";
+            log(`❌ ${shortUrl}: ${msg}`, "err");
           }
         } catch (err) {
           log(`❌ ${shortUrl}: ${err.message}`, "err");
@@ -572,27 +587,77 @@
     };
 
     // ── Diagnostics ──────────────────────────────────────
-    async function runDiagnostic(endpoint, label, statusEl) {
-      statusEl.textContent = `Testing ${label}…`;
+
+    // AI test — calls the provider directly from the browser, no server needed.
+    async function testAiDirect() {
+      const cfg     = getAiConfigFromForm();
+      const statusEl = document.getElementById("diag-status");
+
+      if (!cfg.api_key) {
+        statusEl.innerHTML = "⚠ Enter your API Key first";
+        log("AI test: no API key set", "err");
+        return;
+      }
+      if (!cfg.model_id) {
+        statusEl.innerHTML = "⚠ Enter a Model ID first";
+        log("AI test: no model ID set", "err");
+        return;
+      }
+
+      const baseUrl = (cfg.base_url || "https://api.openai.com/v1").replace(/\/$/, "");
+      statusEl.textContent = `Testing ${baseUrl}…`;
+
       try {
-        const res  = await fetch(`${getAPI()}${endpoint}`);
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${cfg.api_key}`,
+          },
+          body: JSON.stringify({
+            model: cfg.model_id,
+            messages: [
+              { role: "system", content: "You validate API connectivity." },
+              { role: "user",   content: "Reply with exactly: OK" },
+            ],
+            max_tokens: 5,
+            temperature: 0,
+          }),
+        });
+
         const data = await res.json();
-        const icon = data.ok ? "✅" : "❌";
-        statusEl.innerHTML = `${icon} <strong>${label}:</strong> ${data.message}`;
-        log(`${icon} ${label}: ${data.message}`, data.ok ? "ok" : "err");
+        if (data.error) {
+          statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${data.error.message || JSON.stringify(data.error)}`;
+          log(`❌ AI: ${data.error.message || JSON.stringify(data.error)}`, "err");
+        } else {
+          const reply = data.choices?.[0]?.message?.content || "(no content)";
+          statusEl.innerHTML = `✅ <strong>AI Model:</strong> Connected — "${reply}"`;
+          log(`✅ AI: ${cfg.model_id} at ${baseUrl} — "${reply}"`, "ok");
+        }
       } catch (err) {
-        statusEl.innerHTML = `❌ <strong>${label}:</strong> ${err.message} — is server.py running at ${getAPI()}?`;
-        log(`❌ ${label}: ${err.message}`, "err");
+        statusEl.innerHTML = `❌ <strong>AI Model:</strong> ${err.message}`;
+        log(`❌ AI fetch error: ${err.message}`, "err");
       }
     }
 
-    document.getElementById("test-ai").onclick = () => {
-      runDiagnostic("/api/test/ai", "AI Model", document.getElementById("diag-status"));
-    };
+    // Search test — requires server.py (uses Python duckduckgo-search lib).
+    async function testSearchViaServer() {
+      const statusEl = document.getElementById("diag-status");
+      statusEl.textContent = "Testing Search…";
+      try {
+        const res  = await fetch(`${getAPI()}/api/test/search`);
+        const data = await res.json();
+        const icon = data.ok ? "✅" : "❌";
+        statusEl.innerHTML = `${icon} <strong>Search:</strong> ${data.message}`;
+        log(`${icon} Search (${data.provider}): ${data.message}`, data.ok ? "ok" : "err");
+      } catch (err) {
+        statusEl.innerHTML = `❌ <strong>Search:</strong> server.py not running at ${getAPI()}`;
+        log(`❌ Search: server.py unreachable at ${getAPI()}`, "err");
+      }
+    }
 
-    document.getElementById("test-search").onclick = () => {
-      runDiagnostic("/api/test/search", "Search", document.getElementById("diag-status"));
-    };
+    document.getElementById("test-ai").onclick     = testAiDirect;
+    document.getElementById("test-search").onclick = testSearchViaServer;
 
     // ── Firebase ─────────────────────────────────────────
     function setFirebaseStatus(connected, label) {
