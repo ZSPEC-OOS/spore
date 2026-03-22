@@ -11,6 +11,7 @@ Assembled for SPORE as a runnable prototype with:
 from __future__ import annotations
 
 import asyncio
+import os
 import random
 import re
 from dataclasses import dataclass, field
@@ -51,6 +52,117 @@ class MemoryNode:
     confidence: float
     category: str
     related_concepts: List[str] = field(default_factory=list)
+
+
+@dataclass
+class AIModelConfig:
+    name: str = "Default Search Model"
+    model_id: str = ""
+    base_url: str = ""
+    api_key: str = ""
+
+    @classmethod
+    def from_env(cls) -> "AIModelConfig":
+        return cls(
+            name=os.getenv("SPORE_AI_MODEL_NAME", "Default Search Model"),
+            model_id=os.getenv("SPORE_AI_MODEL_ID", ""),
+            base_url=os.getenv("SPORE_AI_BASE_URL", ""),
+            api_key=os.getenv("SPORE_AI_API_KEY", ""),
+        )
+
+    def as_display_dict(self) -> Dict[str, str]:
+        masked = "••••••••" if self.api_key else "(not set)"
+        return {
+            "name": self.name or "(not set)",
+            "model_id": self.model_id or "(not set)",
+            "base_url": self.base_url or "(not set)",
+            "api_key": masked,
+        }
+
+
+class ExternalAIClient:
+    """Optional OpenAI-compatible client used ONLY for search/crawl enrichment."""
+
+    def __init__(self, config: AIModelConfig):
+        self.config = config
+        self._client = None
+
+    def is_configured(self) -> bool:
+        return bool(self.config.model_id and self.config.api_key)
+
+    async def test_connection(self) -> Tuple[bool, str]:
+        if not self.is_configured():
+            return False, "AI model is not configured (model_id/api_key missing)."
+
+        try:
+            client = self._get_client()
+        except Exception as exc:
+            return False, f"AI client unavailable: {exc}"
+
+        try:
+            response = await client.chat.completions.create(
+                model=self.config.model_id,
+                messages=[
+                    {"role": "system", "content": "You validate API connectivity."},
+                    {"role": "user", "content": "Reply with: OK"},
+                ],
+                temperature=0,
+                max_tokens=5,
+            )
+            text = response.choices[0].message.content if response.choices else ""
+            return True, f"Connected (response: {text or 'empty'})"
+        except Exception as exc:
+            return False, f"Connection failed: {exc}"
+
+    async def suggest_search_queries(self, query: str, context: str = "") -> List[str]:
+        if not self.is_configured():
+            return [query]
+
+        try:
+            client = self._get_client()
+            response = await client.chat.completions.create(
+                model=self.config.model_id,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Generate up to 2 alternate web search queries for crawling. "
+                            "Return one query per line, no bullets, no explanation."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Query: {query}\nContext: {context or 'none'}",
+                    },
+                ],
+                temperature=0.2,
+                max_tokens=120,
+            )
+            text = response.choices[0].message.content if response.choices else ""
+            variants = [line.strip("-• \t") for line in text.splitlines() if line.strip()]
+            unique = [query]
+            for candidate in variants:
+                if candidate.lower() != query.lower() and candidate not in unique:
+                    unique.append(candidate)
+                if len(unique) >= 3:
+                    break
+            return unique
+        except Exception:
+            return [query]
+
+    def _get_client(self):
+        if self._client is not None:
+            return self._client
+        try:
+            from openai import AsyncOpenAI
+        except Exception as exc:
+            raise RuntimeError("Install `openai` package to use external AI model.") from exc
+
+        kwargs = {"api_key": self.config.api_key}
+        if self.config.base_url:
+            kwargs["base_url"] = self.config.base_url
+        self._client = AsyncOpenAI(**kwargs)
+        return self._client
 
 
 class NeuralNetworkVisualizer:
@@ -161,20 +273,76 @@ class SearchProvider:
             },
         ]
 
+    async def health_check(self) -> Tuple[bool, str]:
+        return True, "Mock provider ready"
+
+
+class DuckDuckGoSearchProvider(SearchProvider):
+    """DuckDuckGo-backed search provider."""
+
+    def __init__(self, max_results: int = 5):
+        self.max_results = max_results
+        try:
+            from ddgs import DDGS  # noqa: F401
+        except Exception as exc:
+            raise RuntimeError("Install `duckduckgo-search` to enable live search.") from exc
+
+    async def search(self, query: str) -> List[Dict[str, str]]:
+        return await asyncio.to_thread(self._sync_search, query)
+
+    def _sync_search(self, query: str) -> List[Dict[str, str]]:
+        from ddgs import DDGS
+
+        out: List[Dict[str, str]] = []
+        with DDGS() as ddgs:
+            for item in ddgs.text(query, max_results=self.max_results):
+                out.append(
+                    {
+                        "title": item.get("title", f"Result for {query}"),
+                        "url": item.get("href", ""),
+                        "snippet": item.get("body", ""),
+                    }
+                )
+        return [r for r in out if r["url"]]
+
+    async def health_check(self) -> Tuple[bool, str]:
+        try:
+            results = await self.search("site:example.com language learning")
+            return True, f"DDG reachable ({len(results)} sample results)"
+        except Exception as exc:
+            return False, f"DDG health check failed: {exc}"
+
 
 class DuckDuckGoCrawler:
     """Crawler pipeline with pluggable search provider."""
 
-    def __init__(self, search_provider: Optional[SearchProvider] = None):
-        self.provider = search_provider or SearchProvider()
+    def __init__(
+        self,
+        search_provider: Optional[SearchProvider] = None,
+        ai_client: Optional[ExternalAIClient] = None,
+    ):
+        self.provider = search_provider or self._build_default_provider()
+        self.ai_client = ai_client
         self.visited_urls: Set[str] = set()
         self.knowledge_base: List[MemoryNode] = []
 
     async def search_and_learn(self, query: str, context: str = "") -> List[MemoryNode]:
-        search_results = await self.provider.search(query)
-        learned_nodes: List[MemoryNode] = []
+        queries = [query]
+        if self.ai_client:
+            queries = await self.ai_client.suggest_search_queries(query, context=context)
 
+        search_results: List[Dict[str, str]] = []
+        for variant in queries:
+            search_results.extend(await self.provider.search(variant))
+
+        learned_nodes: List[MemoryNode] = []
+        deduped_results: Dict[str, Dict[str, str]] = {}
         for result in search_results:
+            url = result.get("url", "")
+            if url and url not in deduped_results:
+                deduped_results[url] = result
+
+        for result in deduped_results.values():
             if result["url"] in self.visited_urls:
                 continue
 
@@ -192,6 +360,12 @@ class DuckDuckGoCrawler:
             learned_nodes.append(node)
 
         return learned_nodes
+
+    def _build_default_provider(self) -> SearchProvider:
+        try:
+            return DuckDuckGoSearchProvider()
+        except Exception:
+            return SearchProvider()
 
     async def _extract_content(self, result: Dict[str, str]) -> str:
         return f"{result['title']}. {result['snippet']}"
@@ -226,12 +400,32 @@ class LanguageLearningEngine:
     def __init__(self):
         self.phase = LearningPhase.INITIALIZATION
         self.visualizer = NeuralNetworkVisualizer()
-        self.crawler = DuckDuckGoCrawler()
+        self.ai_config = AIModelConfig.from_env()
+        self.ai_client = ExternalAIClient(self.ai_config)
+        self.crawler = DuckDuckGoCrawler(ai_client=self.ai_client)
         self.memory: List[MemoryNode] = []
         self.language_patterns: Dict[str, int] = {}
         self.topic: Optional[str] = None
         self.is_learning = False
         self._initialize_core_neurons()
+
+    def configure_ai_model(self, name: str, model_id: str, base_url: str, api_key: str) -> None:
+        self.ai_config = AIModelConfig(
+            name=name.strip() or "Default Search Model",
+            model_id=model_id.strip(),
+            base_url=base_url.strip(),
+            api_key=api_key.strip(),
+        )
+        self.ai_client = ExternalAIClient(self.ai_config)
+        self.crawler.ai_client = self.ai_client
+
+    async def test_integrations(self) -> Dict[str, Tuple[bool, str]]:
+        ai_ok, ai_msg = await self.ai_client.test_connection()
+        provider_ok, provider_msg = await self.crawler.provider.health_check()
+        return {
+            "ai_model": (ai_ok, ai_msg),
+            "search_provider": (provider_ok, provider_msg),
+        }
 
     def _initialize_core_neurons(self) -> None:
         root = self.visualizer.add_neuron("Language", layer=0)
@@ -399,6 +593,9 @@ Commands:
   ask <question>   - Test knowledge
   visualize        - Print SVG preview
   status           - Check learning progress
+  ai show          - Show AI model config (search/crawl only)
+  ai config        - Configure AI model (name, model ID, base URL, API key)
+  ai test          - Test AI model connection + web search provider
   exit             - Shutdown system
 """
         )
@@ -443,8 +640,39 @@ Topic: {self.engine.topic or 'None'}
 """
                 )
                 continue
+            if lower == "ai show":
+                config = self.engine.ai_config.as_display_dict()
+                print(
+                    f"""
+AI Model Configuration (Search/Crawl Only):
+  Name: {config['name']}
+  Model ID: {config['model_id']}
+  Base URL: {config['base_url']}
+  API Key: {config['api_key']}
+"""
+                )
+                continue
+            if lower == "ai config":
+                current = self.engine.ai_config
+                print("Leave any field empty to keep current value.")
+                name = input(f"Model Name [{current.name}]: ").strip() or current.name
+                model_id = input(f"Model ID [{current.model_id or 'unset'}]: ").strip() or current.model_id
+                base_url = input(f"Base URL [{current.base_url or 'unset'}]: ").strip() or current.base_url
+                api_key = input("API Key [hidden, press Enter to keep current]: ").strip() or current.api_key
+                self.engine.configure_ai_model(name, model_id, base_url, api_key)
+                print("✅ AI model configuration updated. Used only for web search/crawl enrichment.")
+                continue
+            if lower == "ai test":
+                print("🧪 Running integration tests...")
+                results = await self.engine.test_integrations()
+                for label, (ok, message) in results.items():
+                    icon = "✅" if ok else "❌"
+                    print(f"{icon} {label}: {message}")
+                continue
 
-            print("Unknown command. Try: learn general | learn <topic> | ask <question> | status | exit")
+            print(
+                "Unknown command. Try: learn general | learn <topic> | ask <question> | status | ai show | ai config | ai test | exit"
+            )
 
 
 if __name__ == "__main__":
