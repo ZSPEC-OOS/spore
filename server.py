@@ -19,6 +19,8 @@ from typing import Optional
 try:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
     import uvicorn
 except ImportError as exc:
@@ -36,6 +38,7 @@ from nlws.system import (
 # ---------------------------------------------------------------------------
 
 _CONFIG_PATH = Path(__file__).parent / "config.json"
+_WEB_DIR     = Path(__file__).parent / "web"
 
 
 def _load_config() -> AIModelConfig:
@@ -146,18 +149,15 @@ async def test_search():
     }
 
 
+# Serve static assets from web/ (must be mounted before the catch-all GET /)
+if _WEB_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(_WEB_DIR)), name="static")
+
+
 @app.get("/")
 async def root():
-    return {
-        "service": "SPORE NLWS API",
-        "status": "running",
-        "endpoints": {
-            "GET  /api/config": "Show AI model config (key masked)",
-            "POST /api/config": "Save AI model config",
-            "GET  /api/test/ai": "Test AI model connectivity",
-            "GET  /api/test/search": "Test DuckDuckGo search provider",
-        },
-    }
+    """Serve the visualizer as the homepage."""
+    return FileResponse(_WEB_DIR / "visualizer.html")
 
 
 # ---------------------------------------------------------------------------
