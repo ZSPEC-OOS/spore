@@ -1,0 +1,33 @@
+[build-system]
+requires      = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name        = "spore"
+version     = "0.1.0"
+description = "SPORE — System for Progressive Online Research & Evolution"
+readme      = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+]
+
+[project.optional-dependencies]
+search = ["duckduckgo-search>=6.0.0"]
+ai     = ["openai>=1.0.0"]
+dev    = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+spore-cli = "spore.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["spore*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths    = ["tests"]

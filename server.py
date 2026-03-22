@@ -1,4 +1,4 @@
-"""SPORE NLWS HTTP Server.
+"""SPORE HTTP Server.
 
 Provides REST API endpoints for:
 - Diagnostic tests (AI model connectivity, DuckDuckGo search health)
@@ -26,7 +26,7 @@ try:
 except ImportError as exc:
     raise RuntimeError("Run: pip install fastapi uvicorn") from exc
 
-from nlws.system import (
+from spore import (
     AIModelConfig,
     ExternalAIClient,
     DuckDuckGoSearchProvider,
@@ -37,7 +37,7 @@ from nlws.system import (
 # Config persistence (local JSON file — Firebase sync happens in the browser)
 # ---------------------------------------------------------------------------
 
-_CONFIG_PATH = Path(__file__).parent / "config.json"
+_CONFIG_PATH = Path(__file__).parent / "data" / "config.json"
 _WEB_DIR     = Path(__file__).parent / "web"
 
 
@@ -58,6 +58,7 @@ def _load_config() -> AIModelConfig:
 
 
 def _save_config(config: AIModelConfig) -> None:
+    _CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     _CONFIG_PATH.write_text(
         json.dumps(
             {
