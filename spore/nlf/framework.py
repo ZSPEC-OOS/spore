@@ -198,6 +198,118 @@ class NLFFramework:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return self.load_stage_from_dict(data)
 
+    def load_stage_from_simple_spec(self, spec: dict) -> Stage:
+        """
+        Load a Stage from a simplified human-readable spec.
+
+        This format accepts the 10 responses as *seed slot templates* —
+        they define the canonical answer space.  The VariantGenerator later
+        generates thousands of surface-form variations of each *question*,
+        and training cycles iterate over those variants selecting from these
+        10 response slots.  ``cycles_min``/``cycles_max`` record the target
+        iteration budget (not the number of unique responses).
+
+        Simplified spec format::
+
+            {
+              "stage_number": 0,
+              "stage_name":   "Foundational Social Language",
+              "description":  "Before any grammar or complex categories",
+              "categories": [
+                {
+                  "id":       "cat_0_1",
+                  "name":     "Greetings & Social Rituals",
+                  "purpose":  "Learn that language is for social connection…",
+                  "questions": [
+                    {
+                      "question":  "Hi",
+                      "responses": ["Hi", "Hello", "Hey", …]   // exactly 10
+                    },
+                    …
+                  ],
+                  "cycles_min": 10000,
+                  "cycles_max": 20000
+                }
+              ]
+            }
+
+        Slot function/register are inferred by position (§4.1 mapping):
+            1–2 → direct/neutral   3–4 → elaborated/formal
+            5–6 → colloquial/casual  7 → deflection/neutral
+            8   → meta/neutral       9 → playful/playful
+            10  → limitation/formal
+        """
+        # Position → (SlotFunction, Register) mapping
+        _SLOT_MAP: dict[int, tuple[str, str]] = {
+            1: ("direct",     "neutral"),
+            2: ("direct",     "neutral"),
+            3: ("elaborated", "formal"),
+            4: ("elaborated", "formal"),
+            5: ("colloquial", "casual"),
+            6: ("colloquial", "casual"),
+            7: ("deflection", "neutral"),
+            8: ("meta",       "neutral"),
+            9: ("playful",    "playful"),
+            10: ("limitation", "formal"),
+        }
+
+        full_spec: dict = {
+            "number":      spec["stage_number"],
+            "name":        spec.get("stage_name", f"Stage {spec['stage_number']}"),
+            "description": spec.get("description", ""),
+            "categories":  [],
+        }
+
+        for cat in spec.get("categories", []):
+            cat_id = cat["id"]
+            questions_spec = []
+            for idx, q in enumerate(cat.get("questions", []), start=1):
+                q_id = f"bq_{cat_id}_{idx}"
+                canonical = q["question"]
+                responses = q.get("responses", [])
+
+                slots_spec = []
+                for slot_num in range(1, 11):
+                    text = responses[slot_num - 1] if slot_num - 1 < len(responses) else ""
+                    func, reg = _SLOT_MAP[slot_num]
+                    slots_spec.append({
+                        "slot_number": slot_num,
+                        "text":        text,
+                        "function":    func,
+                        "register":    reg,
+                        "use_case":    f"Seed response {slot_num}",
+                    })
+
+                questions_spec.append({
+                    "id":             q_id,
+                    "semantic_intent": canonical,
+                    "canonical_form":  canonical,
+                    "slots":           slots_spec,
+                    "variants":        [],
+                    # Store cycles budget on the question for later reference
+                    "_cycles_min":    cat.get("cycles_min"),
+                    "_cycles_max":    cat.get("cycles_max"),
+                })
+
+            full_spec["categories"].append({
+                "id":          cat_id,
+                "name":        cat["name"],
+                "description": cat.get("purpose", cat.get("description", "")),
+                "questions":   questions_spec,
+                # Persist cycle budget as extra metadata (ignored by load_stage_from_dict)
+                "_cycles_min": cat.get("cycles_min"),
+                "_cycles_max": cat.get("cycles_max"),
+            })
+
+        stage = self.load_stage_from_dict(full_spec)
+
+        # Attach cycle budget to each category for display / planning
+        for cat_spec, stage_cat in zip(spec.get("categories", []), stage.categories):
+            stage_cat.cycles_min = cat_spec.get("cycles_min")  # type: ignore[attr-defined]
+            stage_cat.cycles_max = cat_spec.get("cycles_max")  # type: ignore[attr-defined]
+
+        return stage
+
     # ------------------------------------------------------------------
     # Training cycle
     # ------------------------------------------------------------------
