@@ -335,7 +335,15 @@
         <button id="save-brain" disabled>💾 Save Brain</button>
         <button id="load-brain" disabled>📂 Load Brain</button>
       </div>
-      <p class="hint">Saves as <code>spore-brain.json</code>. Auto-saves after each committed training cycle.</p>
+      <!-- Firebase cloud storage -->
+      <div style="margin-top:8px;border-top:1px solid rgba(0,242,255,0.12);padding-top:8px">
+        <div style="font-size:10px;color:#8deaff;letter-spacing:.05em;margin-bottom:5px">☁ FIREBASE CLOUD</div>
+        <div class="row">
+          <button id="fb-save-brain">☁ Save All</button>
+          <button id="fb-load-brain">☁ Load</button>
+        </div>
+        <div id="fb-sync-status" style="font-size:10px;color:#8deaff;margin-top:4px;min-height:13px">Auto-syncs index after each training cycle</div>
+      </div>
     </section>
   </aside>
 
@@ -447,7 +455,7 @@
     const { initializeApp } = await import(
       "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"
     );
-    const { getFirestore, doc, getDoc, setDoc } = await import(
+    const { getFirestore, doc, getDoc, setDoc, collection, getDocs, writeBatch } = await import(
       "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
     );
 
@@ -477,6 +485,78 @@
         } catch (err) {
           return { ok: false, error: err.message };
         }
+      },
+
+      // ── Brain node storage ──────────────────────────────
+      // spore_nodes/{nodeId}  — one document per neuron
+      // spore_brain/index     — synapse graph + level state
+
+      async saveNode(n) {
+        try {
+          await setDoc(doc(_db, "spore_nodes", n.id), {
+            id:             n.id,
+            concept:        n.concept,
+            x:              Math.round(n.x),
+            y:              Math.round(n.y),
+            layer:          n.layer,
+            source:         n.source,
+            createdAt:      n.createdAt,
+            knowledgeCount: n.knowledgeCount || 0,
+            snippets:       n.snippets || [],
+          });
+          return { ok: true };
+        } catch (err) { return { ok: false, error: err.message }; }
+      },
+
+      async saveIndex(data) {
+        try {
+          await setDoc(doc(_db, "spore_brain", "index"), data);
+          return { ok: true };
+        } catch (err) { return { ok: false, error: err.message }; }
+      },
+
+      // Bulk-save all permanent nodes + index in one batched write
+      async saveBrain(neurons, indexData) {
+        try {
+          // Firestore batch limit is 500 ops; chunk if needed
+          const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
+          const chunks = [];
+          for (let i = 0; i < permanent.length; i += 490) chunks.push(permanent.slice(i, i + 490));
+          for (const chunk of chunks) {
+            const batch = writeBatch(_db);
+            chunk.forEach(n => batch.set(doc(_db, "spore_nodes", n.id), {
+              id:             n.id,
+              concept:        n.concept,
+              x:              Math.round(n.x),
+              y:              Math.round(n.y),
+              layer:          n.layer,
+              source:         n.source,
+              createdAt:      n.createdAt,
+              knowledgeCount: n.knowledgeCount || 0,
+              snippets:       n.snippets || [],
+            }));
+            await batch.commit();
+          }
+          await setDoc(doc(_db, "spore_brain", "index"), indexData);
+          return { ok: true, saved: permanent.length };
+        } catch (err) { return { ok: false, error: err.message }; }
+      },
+
+      async loadBrain() {
+        try {
+          const idxSnap = await getDoc(doc(_db, "spore_brain", "index"));
+          if (!idxSnap.exists()) return { ok: true, data: null };
+          const index = idxSnap.data();
+          const nodeIds = index.neurons || [];
+          // Fetch all node documents
+          const nodeDocs = await Promise.all(
+            nodeIds.map(id => getDoc(doc(_db, "spore_nodes", id)))
+          );
+          const nodes = nodeDocs
+            .filter(s => s.exists())
+            .map(s => s.data());
+          return { ok: true, data: { index, nodes } };
+        } catch (err) { return { ok: false, error: err.message }; }
       },
     };
 
@@ -2364,47 +2444,73 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
     };
 
     // ── Write a single node file: nodes/{id}.json ─────────
+    function fbStatus(msg, type = "") {
+      const el = document.getElementById("fb-sync-status");
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = type === "err" ? "#ff6b6b" : type === "ok" ? "#00ff88" : "#8deaff";
+    }
+
     async function saveNodeFile(n) {
-      if (!brainDirHandle) return;
-      try {
-        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes", { create: true });
-        const fh       = await nodesDir.getFileHandle(`${n.id}.json`, { create: true });
-        const writable = await fh.createWritable();
-        await writable.write(JSON.stringify({
-          id:             n.id,
-          concept:        n.concept,
-          x:              Math.round(n.x),
-          y:              Math.round(n.y),
-          layer:          n.layer,
-          source:         n.source,
-          createdAt:      n.createdAt,
-          knowledgeCount: n.knowledgeCount || 0,
-          snippets:       n.snippets || [],
-        }, null, 2));
-        await writable.close();
-      } catch (err) { log(`Node save error (${n.id}): ${err.message}`, "err"); }
+      // ── Local filesystem ────────────────────────────────
+      if (brainDirHandle) {
+        try {
+          const nodesDir = await brainDirHandle.getDirectoryHandle("nodes", { create: true });
+          const fh       = await nodesDir.getFileHandle(`${n.id}.json`, { create: true });
+          const writable = await fh.createWritable();
+          await writable.write(JSON.stringify({
+            id:             n.id,
+            concept:        n.concept,
+            x:              Math.round(n.x),
+            y:              Math.round(n.y),
+            layer:          n.layer,
+            source:         n.source,
+            createdAt:      n.createdAt,
+            knowledgeCount: n.knowledgeCount || 0,
+            snippets:       n.snippets || [],
+          }, null, 2));
+          await writable.close();
+        } catch (err) { log(`Node save error (${n.id}): ${err.message}`, "err"); }
+      }
+      // ── Firebase (fire-and-forget) ──────────────────────
+      if (window._fb?.saveNode) {
+        window._fb.saveNode(n).then(r => {
+          if (!r.ok) log(`Firebase node sync error (${n.id}): ${r.error}`, "err");
+        });
+      }
     }
 
     // ── Write the graph index: spore-index.json ───────────
     async function saveIndex() {
-      if (!brainDirHandle) return;
-      try {
-        const permanent   = neurons.filter(n => n.type === "permanent" && !n.dead);
-        const idMap       = new Map(permanent.map(n => [n, n.id]));
-        const data = {
-          version: 3,
-          savedAt:      new Date().toISOString(),
-          currentLevel, levelIter, levelPasses,
-          neurons: permanent.map(n => n.id),
-          synapses: synapses
-            .filter(s => idMap.has(s.a) && idMap.has(s.b))
-            .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
-        };
-        const fh       = await brainDirHandle.getFileHandle("spore-index.json", { create: true });
-        const writable = await fh.createWritable();
-        await writable.write(JSON.stringify(data, null, 2));
-        await writable.close();
-      } catch (err) { log(`Index save error: ${err.message}`, "err"); }
+      const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
+      const idMap     = new Map(permanent.map(n => [n, n.id]));
+      const data = {
+        version: 3,
+        savedAt:      new Date().toISOString(),
+        currentLevel, levelIter, levelPasses,
+        neurons: permanent.map(n => n.id),
+        synapses: synapses
+          .filter(s => idMap.has(s.a) && idMap.has(s.b))
+          .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
+      };
+
+      // ── Local filesystem ────────────────────────────────
+      if (brainDirHandle) {
+        try {
+          const fh       = await brainDirHandle.getFileHandle("spore-index.json", { create: true });
+          const writable = await fh.createWritable();
+          await writable.write(JSON.stringify(data, null, 2));
+          await writable.close();
+        } catch (err) { log(`Index save error: ${err.message}`, "err"); }
+      }
+
+      // ── Firebase (fire-and-forget) ──────────────────────
+      if (window._fb?.saveIndex) {
+        window._fb.saveIndex(data).then(r => {
+          if (r.ok) fbStatus(`☁ Synced ${permanent.length} nodes — ${new Date().toLocaleTimeString()}`, "ok");
+          else { fbStatus(`☁ Sync error: ${r.error}`, "err"); log(`Firebase index sync error: ${r.error}`, "err"); }
+        });
+      }
     }
 
     // ── Full save: every node file + index ────────────────
@@ -2474,6 +2580,88 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
 
     document.getElementById("save-brain").onclick = saveBrain;
     document.getElementById("load-brain").onclick  = loadBrain;
+
+    // ── Firebase brain load ───────────────────────────────
+    async function loadBrainFromFirebase() {
+      if (!window._fb?.loadBrain) {
+        fbStatus("Firebase not ready yet — try again in a moment", "err");
+        return;
+      }
+      fbStatus("☁ Loading from Firebase…");
+      log("☁ Loading brain from Firebase…");
+      const result = await window._fb.loadBrain();
+      if (!result.ok) {
+        fbStatus(`☁ Load error: ${result.error}`, "err");
+        log(`Firebase load error: ${result.error}`, "err");
+        return;
+      }
+      if (!result.data) {
+        fbStatus("☁ No brain saved in Firebase yet", "err");
+        log("Firebase: no brain document found", "warn");
+        return;
+      }
+      const { index, nodes } = result.data;
+      // Rebuild the neural network from Firebase data (same logic as loadBrain)
+      const nodeMap = new Map();
+      nodes.forEach(data => {
+        const n = new Neuron(data.concept, data.x, data.y, data.layer,
+          { id: data.id, url: data.snippets?.[0]?.url || null,
+            snippet: data.snippets?.[0]?.text || null, source: data.source });
+        n.type           = "permanent";
+        n.id             = data.id;
+        n.knowledgeCount = data.knowledgeCount || 0;
+        n.snippets       = data.snippets || [];
+        n.createdAt      = data.createdAt || n.createdAt;
+        nodeMap.set(data.id, n);
+      });
+      neurons.length  = 0;
+      synapses.length = 0;
+      nodeMap.forEach(n => neurons.push(n));
+      (index.synapses || []).forEach(s => {
+        const a = nodeMap.get(s.a), b = nodeMap.get(s.b);
+        if (a && b) { const syn = new Synapse(a, b); syn.strength = s.strength ?? 0.08; synapses.push(syn); }
+      });
+      if (index.currentLevel) { currentLevel = index.currentLevel; levelIter = index.levelIter || 0; levelPasses = index.levelPasses || 0; }
+      updateLevelDisplay();
+      syncUI();
+      const tok = sporeML.train();
+      const mlEl = document.getElementById("ts-ml-corpus");
+      if (mlEl) mlEl.textContent = tok > 0 ? tok + " tok / " + sporeML.vocabSize + " vocab" : "—";
+      fbStatus(`☁ Loaded ${neurons.length} nodes from Firebase`, "ok");
+      log(`☁ Brain loaded from Firebase — ${neurons.length} nodes, level ${currentLevel}`, "ok");
+    }
+
+    // ── Firebase bulk save ────────────────────────────────
+    async function saveBrainToFirebase() {
+      if (!window._fb?.saveBrain) {
+        fbStatus("Firebase not ready yet — try again in a moment", "err");
+        return;
+      }
+      const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
+      fbStatus(`☁ Syncing ${permanent.length} nodes…`);
+      log(`☁ Syncing brain to Firebase (${permanent.length} nodes)…`);
+      const idMap   = new Map(permanent.map(n => [n, n.id]));
+      const indexData = {
+        version: 3,
+        savedAt: new Date().toISOString(),
+        currentLevel, levelIter, levelPasses,
+        neurons: permanent.map(n => n.id),
+        synapses: synapses
+          .filter(s => idMap.has(s.a) && idMap.has(s.b))
+          .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
+      };
+      const result = await window._fb.saveBrain(neurons, indexData);
+      if (result.ok) {
+        fbStatus(`☁ Saved ${result.saved} nodes — ${new Date().toLocaleTimeString()}`, "ok");
+        log(`☁ Brain synced to Firebase (${result.saved} nodes)`, "ok");
+      } else {
+        fbStatus(`☁ Save error: ${result.error}`, "err");
+        log(`Firebase save error: ${result.error}`, "err");
+      }
+    }
+
+    document.getElementById("fb-save-brain").onclick = saveBrainToFirebase;
+    document.getElementById("fb-load-brain").onclick  = loadBrainFromFirebase;
 
     // ── Dead-node detection: scan nodes/ dir every 30 s ───
     // Any node file that has been deleted from disk dies in the visualizer.
