@@ -42,7 +42,12 @@
       margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25);
       padding-top: 10px;
     }
-    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; }
+    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; display:flex; align-items:center; justify-content:space-between; }
+    .collapse-btn { cursor:pointer; font-size:10px; opacity:.5; transition:transform .2s,opacity .2s; user-select:none; padding:0 2px; }
+    .collapse-btn:hover { opacity:1; }
+    .collapse-btn.up { transform:rotate(180deg); }
+    #ai-collapsible { overflow:hidden; transition:max-height .25s ease; max-height:1000px; }
+    #ai-collapsible.closed { max-height:0; }
     .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.4; }
     .status-dot {
       display: inline-block; width: 7px; height: 7px;
@@ -73,7 +78,8 @@
 
     <!-- ── AI Model Config ─────────────────────────────── -->
     <section class="section" id="ai-config">
-      <h4>AI Model Config (Search/Crawl)</h4>
+      <h4>AI Model Config (Search/Crawl) <span class="collapse-btn" id="ai-collapse-btn">▼</span></h4>
+    <div id="ai-collapsible">
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
       <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2.5" /></div>
       <div class="row" style="align-items:center">
@@ -91,10 +97,10 @@
       <h4>Diagnostics</h4>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
-        <button id="test-search" class="btn-warn">🔍 Test Search</button>
+        <button id="test-search" class="btn-warn" disabled title="Requires server.py running locally">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">AI test calls your provider directly. Search test requires <code>python server.py</code>.</p>
+      <p class="hint">AI test calls your provider directly from the browser. Search test requires <code>python server.py</code> running locally.</p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -112,7 +118,8 @@
       </p>
     </section>
 
-    <div id="log"></div>
+      <div id="log"></div>
+    </div><!-- /#ai-collapsible -->
   </aside>
 
   <!-- ─────────────────────────────────────────────────── -->
@@ -623,28 +630,16 @@
       }
     }
 
-    // Search test — requires server.py (uses Python duckduckgo-search lib).
-    async function testSearchViaServer() {
-      const statusEl = document.getElementById("diag-status");
-      statusEl.textContent = "Testing Search…";
-      try {
-        const res  = await fetch(`${getAPI()}/api/test/search`);
-        const data = await res.json();
-        const icon = data.ok ? "✅" : "❌";
-        statusEl.innerHTML = `${icon} <strong>Search:</strong> ${data.message}`;
-        log(`${icon} Search (${data.provider}): ${data.message}`, data.ok ? "ok" : "err");
-      } catch (err) {
-        const isFile = window.location.protocol === "file:";
-        const hint   = isFile
-          ? "Open via <strong>http://localhost:8000</strong> (not as a file) — run <code>python server.py</code> then visit that URL"
-          : `server.py not running at ${getAPI()} — run <code>python server.py</code>`;
-        statusEl.innerHTML = `❌ <strong>Search:</strong> ${hint}`;
-        log(`❌ Search: ${isFile ? "page opened as file://, must use http://localhost:8000" : "server.py unreachable"}`, "err");
-      }
-    }
+    document.getElementById("test-ai").onclick = testAiDirect;
 
-    document.getElementById("test-ai").onclick     = testAiDirect;
-    document.getElementById("test-search").onclick = testSearchViaServer;
+    // ── Collapse toggle ───────────────────────────────────
+    document.getElementById("ai-collapse-btn").onclick = () => {
+      const panel = document.getElementById("ai-collapsible");
+      const btn   = document.getElementById("ai-collapse-btn");
+      const closing = !panel.classList.contains("closed");
+      panel.classList.toggle("closed", closing);
+      btn.classList.toggle("up", closing);
+    };
 
     // ── Firebase ─────────────────────────────────────────
     function setFirebaseStatus(connected, label) {
