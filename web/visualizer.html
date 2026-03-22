@@ -1467,10 +1467,17 @@
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      const choice = data.choices?.[0];
+      if (!data.choices?.length) {
+        log(`⚠ AI returned no choices — raw: ${JSON.stringify(data).slice(0, 200)}`, "err");
+        return "";
+      }
+      const choice  = data.choices[0];
       const content = (choice?.message?.content || "").trim();
-      if (!content && choice?.finish_reason === "content_filter") {
-        throw new Error("AI returned empty content (finish_reason: content_filter) — content may have been blocked by the model's safety policy");
+      if (!content) {
+        log(`⚠ AI returned empty content — finish_reason: ${choice?.finish_reason ?? "unknown"}, raw: ${JSON.stringify(choice).slice(0, 200)}`, "err");
+        if (choice?.finish_reason === "content_filter") {
+          throw new Error("AI returned empty content (finish_reason: content_filter)");
+        }
       }
       return content;
     }
@@ -1752,25 +1759,32 @@
         // ── 1. AI generates a unique question ───────────────
         levelIter++;
 
-        // Build a compact list of previously asked questions to avoid
+        // Build a compact avoid-list (last 20, truncated) to keep the prompt short
         const prevList = [...distillAskedQuestions];
         const avoidBlock = prevList.length
-          ? `\n\nYou have already asked these questions — do NOT repeat or closely paraphrase any of them:\n${prevList.slice(-80).map((q, i) => `${i + 1}. ${q}`).join("\n")}`
+          ? `\n\nAvoid repeating these recent questions:\n${prevList.slice(-20).map((q, i) => `${i + 1}. ${q.slice(0, 60)}`).join("\n")}`
           : "";
 
         // Normalise for dedup check (lowercase, strip punctuation)
         const normalise = q => q.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
+        const sysBase = `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.`;
+
         let question = "";
-        const MAX_Q_ATTEMPTS = 3;
+        // Attempts 1-3 use the avoid-list; attempt 4 is a bare fallback with no list
+        const MAX_Q_ATTEMPTS = 4;
         for (let attempt = 1; attempt <= MAX_Q_ATTEMPTS; attempt++) {
+          const isFallback = attempt === MAX_Q_ATTEMPTS;
+          const sysContent = isFallback ? sysBase : sysBase + avoidBlock;
           const userMsg = attempt === 1
             ? "Generate the next training question."
-            : "The previous attempt returned empty or a duplicate. Generate a completely different training question on a new angle or subtopic.";
+            : isFallback
+              ? "Generate any suitable training question."
+              : "The previous attempt returned empty or a duplicate. Generate a completely different training question.";
           tsStatus(`⚗ [Distill] Level ${currentLevel} question… (attempt ${attempt}/${MAX_Q_ATTEMPTS})`);
           try {
             question = await aiCall([
-              { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.${avoidBlock}` },
+              { role: "system", content: sysContent },
               { role: "user",   content: userMsg },
             ], 120);
           } catch (aiErr) {
@@ -1779,13 +1793,13 @@
             continue;
           }
           if (!question) {
-            if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned empty question after 3 attempts — check model config (API key, model ID, and content policy)");
+            if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned empty question after 4 attempts — verify API key, model ID, and that the model supports chat completions");
             log(`⚠ Empty question on attempt ${attempt}, retrying…`, "warn");
             continue;
           }
           // If it's a near-duplicate, retry with an explicit nudge
           if ([...distillAskedQuestions].some(q => normalise(q) === normalise(question))) {
-            if (attempt === MAX_Q_ATTEMPTS) throw new Error("AI returned duplicate question after 3 attempts — question pool may be exhausted");
+            if (attempt === MAX_Q_ATTEMPTS) break; // accept the duplicate rather than failing
             tsStatus(`⚗ [Distill] Duplicate detected — regenerating…`);
             log(`⚠ Duplicate question on attempt ${attempt}, retrying…`, "warn");
             question = "";
