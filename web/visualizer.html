@@ -503,12 +503,17 @@
 
     <section class="section">
       <h4>🗂 Brain Storage</h4>
-      <div style="font-size:9px;color:var(--muted);letter-spacing:.05em;margin-bottom:5px;opacity:.6">☁ FIREBASE CLOUD</div>
-      <div class="row">
-        <button id="fb-save-brain">☁ Save All</button>
-        <button id="fb-load-brain">☁ Load</button>
+      <div id="folder-status-bar" style="font-size:10px;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No folder selected</div>
+      <div class="row"><button id="choose-folder">📁 Choose Folder</button></div>
+      <div id="folder-reconnect" style="display:none">
+        <div class="row"><button id="reconnect-folder" class="btn-warn">🔌 Reconnect Folder</button></div>
       </div>
-      <div id="fb-sync-status" style="font-size:9px;color:var(--muted);margin-top:4px;min-height:12px;opacity:.65">Auto-syncs after training</div>
+      <div id="fb-sync-status" style="font-size:9px;color:var(--muted);margin-top:5px;min-height:12px">—</div>
+      <div style="font-size:9px;color:var(--muted);letter-spacing:.05em;margin:8px 0 4px;opacity:.45">☁ FIREBASE BACKUP</div>
+      <div class="row">
+        <button id="fb-save-brain">☁ Backup</button>
+        <button id="fb-load-brain">☁ Restore</button>
+      </div>
     </section>
 
     <div id="log"></div>
@@ -1409,12 +1414,20 @@
       document.getElementById("fb-pull").disabled = !connected;
     }
 
+    // On startup: try to restore the local folder first (fast, offline).
+    // Firebase is optional cloud backup only.
+    tryRestoreFolder();
+
     // Firebase module signals readiness via a custom event.
-    // Auto-load the brain immediately once Firebase is confirmed ready.
+    // Only auto-load from Firebase if no local folder is active.
     window.addEventListener("firebase-ready", () => {
       setFirebaseStatus(true, "Connected — spore-2d34f");
-      log("Firebase ready — loading brain…", "ok");
-      loadBrainFromFirebase();
+      if (brainFolder) {
+        log("Firebase ready — local folder is primary, Firebase available for backup", "ok");
+      } else {
+        log("Firebase ready — no local folder set; loading brain from Firebase…", "ok");
+        loadBrainFromFirebase();
+      }
     });
 
     // If the module fails (network error, etc.) the event never fires;
@@ -2367,40 +2380,190 @@ Reply ONLY with JSON: {"good": true, "score": 0.85, "feedback": "one brief sente
       });
     }
 
-    function fbStatus(msg, type = "") {
+    // ── Storage status display ────────────────────────────
+    function storageStatus(msg, type = "") {
       const el = document.getElementById("fb-sync-status");
       if (!el) return;
       el.textContent = msg;
-      el.style.color = type === "err" ? "#ff6b6b" : type === "ok" ? "#00ff88" : "#8deaff";
+      el.style.color = type === "err" ? "var(--red)" : type === "ok" ? "var(--green)" : "var(--muted)";
     }
+    // Keep fbStatus as alias — used by Firebase key push/pull code
+    function fbStatus(msg, type = "") { storageStatus(msg, type); }
 
-    function saveNodeFile(n) {
-      if (window._fb?.saveNode) {
-        window._fb.saveNode(n).then(r => {
-          if (!r.ok) log(`Firebase node sync error (${n.id}): ${r.error}`, "err");
-        });
+    // ── Local folder state ────────────────────────────────
+    let brainFolder         = null;   // active FileSystemDirectoryHandle
+    let _pendingFolderHandle = null;  // stored handle awaiting user re-permission
+
+    function updateFolderUI(name) {
+      const bar   = document.getElementById("folder-status-bar");
+      const recon = document.getElementById("folder-reconnect");
+      if (!bar) return;
+      if (name) {
+        bar.textContent = "📁 " + name;
+        bar.style.color = "var(--green)";
+        if (recon) recon.style.display = "none";
+      } else {
+        bar.textContent = "No folder selected";
+        bar.style.color = "var(--muted)";
       }
     }
 
-    // ── Write the graph index to Firebase ─────────────────
+    // ── Write one neuron to folder ────────────────────────
+    async function saveNodeToFolder(n) {
+      if (!brainFolder) return;
+      try {
+        const fh = await brainFolder.getFileHandle(`${n.id}.json`, { create: true });
+        const w  = await fh.createWritable();
+        await w.write(JSON.stringify({
+          id: n.id, concept: n.concept, x: n.x, y: n.y, layer: n.layer,
+          type: n.type, knowledgeCount: n.knowledgeCount,
+          snippets: n.snippets, source: n.source, createdAt: n.createdAt,
+        }));
+        await w.close();
+      } catch (e) { log(`Folder node save error (${n.id}): ${e.message}`, "err"); }
+    }
+
+    function saveNodeFile(n) { saveNodeToFolder(n); }
+
+    // ── Write index to folder ─────────────────────────────
+    async function saveIndexToFolder(data) {
+      if (!brainFolder) return;
+      try {
+        const fh = await brainFolder.getFileHandle("_index.json", { create: true });
+        const w  = await fh.createWritable();
+        await w.write(JSON.stringify(data));
+        await w.close();
+        storageStatus(`📁 ${data.neurons.length} nodes saved — ${new Date().toLocaleTimeString()}`, "ok");
+      } catch (e) { storageStatus(`📁 Save error: ${e.message}`, "err"); }
+    }
+
     function saveIndex() {
       const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
       const idMap     = new Map(permanent.map(n => [n, n.id]));
       const data = {
-        version: 3,
-        savedAt:      new Date().toISOString(),
+        version: 3, savedAt: new Date().toISOString(),
         currentLevel, levelIter, levelPasses,
-        neurons: permanent.map(n => n.id),
+        neurons:  permanent.map(n => n.id),
         synapses: synapses
           .filter(s => idMap.has(s.a) && idMap.has(s.b))
           .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
       };
-      if (window._fb?.saveIndex) {
-        window._fb.saveIndex(data).then(r => {
-          if (r.ok) fbStatus(`☁ Synced ${permanent.length} nodes — ${new Date().toLocaleTimeString()}`, "ok");
-          else { fbStatus(`☁ Sync error: ${r.error}`, "err"); log(`Firebase index sync error: ${r.error}`, "err"); }
+      // Primary: local folder (fast, offline)
+      saveIndexToFolder(data);
+      // Secondary: Firebase optional cloud backup (silent)
+      if (window._fb?.saveIndex) window._fb.saveIndex(data).catch(() => {});
+    }
+
+    // ── Load brain from folder ────────────────────────────
+    async function loadBrainFromFolder() {
+      if (!brainFolder) return;
+      storageStatus("📁 Loading…");
+      try {
+        // Read index
+        let index;
+        try {
+          const fh = await brainFolder.getFileHandle("_index.json");
+          index    = JSON.parse(await (await fh.getFile()).text());
+        } catch (_) {
+          storageStatus("📁 Folder ready — no data yet", "");
+          log("📁 Folder empty — will save after first training cycle", "ok");
+          return;
+        }
+        // Load neuron files in parallel
+        const nodeMap = new Map();
+        await Promise.allSettled((index.neurons || []).map(async id => {
+          try {
+            const fh   = await brainFolder.getFileHandle(`${id}.json`);
+            const data = JSON.parse(await (await fh.getFile()).text());
+            const n = new Neuron(data.concept, data.x ?? 0, data.y ?? 0, data.layer ?? 1, {
+              id: data.id, url: data.snippets?.[0]?.url || null,
+              snippet: data.snippets?.[0]?.text || null, source: data.source,
+            });
+            n.type = "permanent"; n.id = data.id;
+            n.knowledgeCount = data.knowledgeCount || 0;
+            n.snippets       = data.snippets || [];
+            n.createdAt      = data.createdAt || n.createdAt;
+            nodeMap.set(id, n);
+          } catch (_) {} // skip missing files
+        }));
+        neurons.length = 0; synapses.length = 0;
+        nodeMap.forEach(n => neurons.push(n));
+        (index.synapses || []).forEach(s => {
+          const a = nodeMap.get(s.a), b = nodeMap.get(s.b);
+          if (a && b) { const syn = new Synapse(a, b); syn.strength = s.strength ?? 0.08; synapses.push(syn); }
         });
+        if (index.currentLevel) {
+          currentLevel = index.currentLevel;
+          levelIter    = index.levelIter   || 0;
+          levelPasses  = index.levelPasses || 0;
+        }
+        updateLevelDisplay(); updateSvLevel(); syncUI();
+        const tok  = sporeML.train();
+        const mlEl = document.getElementById("ts-ml-corpus");
+        if (mlEl) mlEl.textContent = tok > 0 ? `${tok} tok / ${sporeML.vocabSize} vocab` : "—";
+        storageStatus(`📁 ${neurons.length} nodes loaded — ${new Date().toLocaleTimeString()}`, "ok");
+        log(`📁 Brain loaded — ${neurons.length} nodes, L${currentLevel} (${levelIter} cycles)`, "ok");
+      } catch (e) {
+        storageStatus(`📁 Load error: ${e.message}`, "err");
+        log(`Folder load error: ${e.message}`, "err");
       }
+    }
+
+    // ── Folder picker ─────────────────────────────────────
+    async function chooseBrainFolder() {
+      if (!window.showDirectoryPicker) {
+        log("File System Access API not supported — use Chrome or Edge", "err");
+        return;
+      }
+      try {
+        const handle = await window.showDirectoryPicker({ mode: "readwrite", startIn: "documents" });
+        brainFolder  = handle;
+        _pendingFolderHandle = null;
+        await idbSet("brain-folder", handle);
+        updateFolderUI(handle.name);
+        log(`📁 Folder set: ${handle.name}`, "ok");
+        await loadBrainFromFolder();
+      } catch (e) {
+        if (e.name !== "AbortError") log(`Folder picker error: ${e.message}`, "err");
+      }
+    }
+
+    // ── Reconnect a remembered folder (needs user gesture) ─
+    async function reconnectFolder() {
+      if (!_pendingFolderHandle) return;
+      try {
+        const perm = await _pendingFolderHandle.requestPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          brainFolder = _pendingFolderHandle;
+          _pendingFolderHandle = null;
+          updateFolderUI(brainFolder.name);
+          log(`📁 Reconnected: ${brainFolder.name}`, "ok");
+          await loadBrainFromFolder();
+        }
+      } catch (e) { log(`Reconnect failed: ${e.message}`, "err"); }
+    }
+
+    // ── Restore folder handle from IDB on startup ─────────
+    async function tryRestoreFolder() {
+      try {
+        const handle = await idbGet("brain-folder");
+        if (!handle) return;
+        const perm = await handle.queryPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          brainFolder = handle;
+          updateFolderUI(handle.name);
+          log(`📁 Folder restored: ${handle.name}`, "ok");
+          await loadBrainFromFolder();
+        } else {
+          // Need a user gesture to request permission — show reconnect button
+          _pendingFolderHandle = handle;
+          const bar = document.getElementById("folder-status-bar");
+          if (bar) { bar.textContent = `📁 ${handle.name} — tap to reconnect`; bar.style.color = "var(--amber)"; }
+          const recon = document.getElementById("folder-reconnect");
+          if (recon) recon.style.display = "";
+          storageStatus("Click 'Reconnect Folder' to reload your brain", "");
+        }
+      } catch (e) { log(`Folder restore error: ${e.message}`, "err"); }
     }
 
     // ── Firebase brain load ───────────────────────────────
@@ -2482,8 +2645,10 @@ Reply ONLY with JSON: {"good": true, "score": 0.85, "feedback": "one brief sente
       }
     }
 
-    document.getElementById("fb-save-brain").onclick = saveBrainToFirebase;
+    document.getElementById("fb-save-brain").onclick  = saveBrainToFirebase;
     document.getElementById("fb-load-brain").onclick  = loadBrainFromFirebase;
+    document.getElementById("choose-folder").onclick  = chooseBrainFolder;
+    document.getElementById("reconnect-folder").onclick = reconnectFolder;
 
 
     // ── Canvas control buttons ────────────────────────────
