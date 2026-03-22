@@ -97,10 +97,10 @@
       <h4>Diagnostics</h4>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
-        <button id="test-search" class="btn-warn" disabled title="Requires server.py running locally">🔍 Test Search</button>
+        <button id="test-search" class="btn-warn">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">AI test calls your provider directly from the browser. Search test requires <code>python server.py</code> running locally.</p>
+      <p class="hint">Both tests run directly from your browser — no server needed.</p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -390,11 +390,59 @@
       const source = neurons[Math.floor(Math.random() * neurons.length)];
       source.activate();
       synapses.forEach(s => { if (s.a === source && Math.random() > 0.5) s.transmit(); });
-      if (Math.random() > 0.98 && neurons.length < 180) {
-        const vocab = ["Pattern", "Signal", "Reference", "Meaning", "Vector", "Node", "Context"];
-        grow(vocab[Math.floor(Math.random() * vocab.length)] + "_" + neurons.length, source);
-      }
       learningProgress = Math.min(100, learningProgress + 0.15);
+      syncUI();
+    }
+
+    // ── DuckDuckGo Instant Answer search (browser-native, no server) ──
+    async function ddgSearch(query) {
+      const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&no_redirect=1`;
+      const res  = await fetch(url);
+      const data = await res.json();
+      const out  = [];
+
+      if (data.AbstractText && data.AbstractURL) {
+        out.push({ title: data.Heading || query, url: data.AbstractURL, snippet: data.AbstractText });
+      }
+      for (const r of data.Results || []) {
+        if (r.FirstURL) out.push({ title: r.Text || query, url: r.FirstURL, snippet: r.Text || "" });
+      }
+      for (const t of data.RelatedTopics || []) {
+        if (t.Text && t.FirstURL && !t.Topics) {
+          const dash = t.Text.indexOf(" - ");
+          out.push({
+            title:   dash > -1 ? t.Text.slice(0, dash) : t.Text.slice(0, 50),
+            url:     t.FirstURL,
+            snippet: dash > -1 ? t.Text.slice(dash + 3) : t.Text,
+          });
+        }
+        for (const sub of t.Topics || []) {
+          if (sub.Text && sub.FirstURL) {
+            const dash = sub.Text.indexOf(" - ");
+            out.push({
+              title:   dash > -1 ? sub.Text.slice(0, dash) : sub.Text.slice(0, 50),
+              url:     sub.FirstURL,
+              snippet: dash > -1 ? sub.Text.slice(dash + 3) : sub.Text,
+            });
+          }
+        }
+      }
+      return out.slice(0, 8);
+    }
+
+    // Grow neurons from real search results
+    async function learnFromQuery(query) {
+      log(`Searching: ${query}`);
+      const results = await ddgSearch(query);
+      if (!results.length) { log(`No results for: ${query}`, "err"); return; }
+      for (const r of results) {
+        const words   = r.title.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/).filter(Boolean);
+        const concept = words.slice(0, 2).join(" ") || query;
+        const parent  = neurons[Math.floor(Math.random() * Math.min(neurons.length, 8))];
+        grow(concept, parent).activate();
+        learningProgress = Math.min(100, learningProgress + 1.5);
+      }
+      log(`Learned ${results.length} concepts from "${results[0].title.slice(0, 35)}"`);
       syncUI();
     }
 
@@ -409,19 +457,47 @@
     }
 
     // ── Learning controls ────────────────────────────────
-    document.getElementById("general").onclick = () => {
+    const GENERAL_QUERIES = [
+      "conversation patterns natural language",
+      "understanding user intent questions",
+      "context clues meaning in text",
+      "tone and sentiment in writing",
+      "knowledge representation concepts",
+    ];
+
+    document.getElementById("general").onclick = async () => {
+      if (isLearning) return;
       isLearning = true;
       document.getElementById("phase").textContent = "General Language";
-      log("Starting general language acquisition");
+      log("Starting general language acquisition…");
+      for (const q of GENERAL_QUERIES) {
+        if (!isLearning) break;
+        try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
+        await new Promise(r => setTimeout(r, 600));
+      }
+      log("General acquisition complete");
     };
 
-    document.getElementById("specialize").onclick = () => {
+    document.getElementById("specialize").onclick = async () => {
       const topic = document.getElementById("topic").value.trim();
       if (!topic) return alert("Please enter a topic first");
+      if (isLearning) return;
       isLearning = true;
       document.getElementById("phase").textContent = `Topic: ${topic}`;
       grow(topic, neurons[0]).activate();
-      log(`Specializing in topic: ${topic}`);
+      log(`Specializing in: ${topic}`);
+      const queries = [
+        `${topic} fundamentals basics`,
+        `${topic} advanced concepts`,
+        `${topic} examples applications`,
+      ];
+      for (const q of queries) {
+        if (!isLearning) break;
+        try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
+        await new Promise(r => setTimeout(r, 600));
+      }
+      log(`Specialization in "${topic}" complete`);
+      isLearning = false;
     };
 
     document.getElementById("pause").onclick = () => {
@@ -631,6 +707,24 @@
     }
 
     document.getElementById("test-ai").onclick = testAiDirect;
+
+    document.getElementById("test-search").onclick = async () => {
+      const statusEl = document.getElementById("diag-status");
+      statusEl.textContent = "Testing DuckDuckGo…";
+      try {
+        const results = await ddgSearch("language learning");
+        if (results.length) {
+          statusEl.innerHTML = `✅ <strong>Search:</strong> DuckDuckGo OK — ${results.length} results`;
+          log(`✅ Search: DDG connected — "${results[0].title.slice(0, 40)}"`, "ok");
+        } else {
+          statusEl.innerHTML = `⚠ <strong>Search:</strong> DuckDuckGo returned no results`;
+          log("⚠ Search: DDG returned 0 results", "err");
+        }
+      } catch (err) {
+        statusEl.innerHTML = `❌ <strong>Search:</strong> ${err.message}`;
+        log(`❌ Search: ${err.message}`, "err");
+      }
+    };
 
     // ── Collapse toggle ───────────────────────────────────
     document.getElementById("ai-collapse-btn").onclick = () => {
