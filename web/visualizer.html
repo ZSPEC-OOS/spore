@@ -1435,7 +1435,7 @@
       const raw = await aiCall([
         { role: "system", content: `You are SPORE's curriculum evaluator. Your job is to decide whether SPORE has GENUINELY mastered Level ${currentLevel} (${levelName(currentLevel)}) conversational language and deserves to advance to Level ${currentLevel + 1} (${levelName(currentLevel + 1)}). Be strict: occasional good answers are not enough. SPORE must show consistent accuracy across multiple question variations. Reply ONLY with valid JSON: {"advance": true/false, "reason": "one concise sentence", "needsMore": "specific topic to reinforce if not advancing, else null"}` },
         { role: "user", content: `Level ${currentLevel} — last ${Math.min(6, levelHistory.length)} exchanges:\n${pairs}\n\nTotal at this level: ${levelPasses} passes out of ${levelIter} attempts.\nShould SPORE advance to Level ${currentLevel + 1}?` },
-      ], 150);
+      ], 1000);
 
       let decision = { advance: false, reason: "Parse error", needsMore: null };
       try { const m = raw.match(/\{[\s\S]*?\}/); if (m) decision = { ...decision, ...JSON.parse(m[0]) }; } catch(_) {}
@@ -1468,16 +1468,31 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
       if (!data.choices?.length) {
-        log(`⚠ AI returned no choices — raw: ${JSON.stringify(data).slice(0, 200)}`, "err");
+        log(`⚠ AI returned no choices — raw: ${JSON.stringify(data).slice(0, 300)}`, "err");
         return "";
       }
       const choice  = data.choices[0];
-      const content = (choice?.message?.content || "").trim();
+      const msg     = choice?.message || {};
+      let content   = (msg.content || "").trim();
+
+      // Reasoning models (DeepSeek-R1, QwQ, etc.) put chain-of-thought in
+      // reasoning_content / thinking and leave content empty when max_tokens
+      // runs out mid-think. Extract the last sentence as the actual answer.
       if (!content) {
-        log(`⚠ AI returned empty content — finish_reason: ${choice?.finish_reason ?? "unknown"}, raw: ${JSON.stringify(choice).slice(0, 200)}`, "err");
-        if (choice?.finish_reason === "content_filter") {
-          throw new Error("AI returned empty content (finish_reason: content_filter)");
+        const reasoning = (msg.reasoning_content || msg.thinking || "").trim();
+        if (reasoning) {
+          // Take the last non-empty sentence — that's closest to the conclusion
+          const sentences = reasoning.split(/(?<=[.?!])\s+/).map(s => s.trim()).filter(Boolean);
+          content = sentences[sentences.length - 1] || "";
+          if (content) log(`⚠ Using reasoning_content fallback (finish_reason: ${choice?.finish_reason}) — extracted: "${content.slice(0, 80)}"`, "warn");
         }
+      }
+
+      if (!content) {
+        const fr = choice?.finish_reason ?? "unknown";
+        log(`⚠ AI returned empty content — finish_reason: ${fr}, raw: ${JSON.stringify(choice).slice(0, 300)}`, "err");
+        if (fr === "content_filter") throw new Error("AI returned empty content (finish_reason: content_filter)");
+        if (fr === "length") throw new Error("AI hit max_tokens before generating output — increase model token limit or simplify the prompt");
       }
       return content;
     }
@@ -1786,7 +1801,7 @@
             question = await aiCall([
               { role: "system", content: sysContent },
               { role: "user",   content: userMsg },
-            ], 120);
+            ], 2000);
           } catch (aiErr) {
             if (attempt === MAX_Q_ATTEMPTS) throw aiErr;
             log(`⚠ AI error on attempt ${attempt}: ${aiErr.message} — retrying…`, "warn");
@@ -1824,7 +1839,7 @@
             content: `You are distilling knowledge for SPORE, a neural learning system. Given a question, generate exactly 4 distinct, accurate, and complementary knowledge fragments that together answer the question comprehensively. These fragments are injected directly into SPORE's neural network — no web search occurs. Each fragment must be 1–3 factual sentences focusing on a different angle. Return ONLY a valid JSON array of exactly 4 strings, no other text: ["fragment1", "fragment2", "fragment3", "fragment4"]`,
           },
           { role: "user", content: question },
-        ], 500);
+        ], 1500);
 
         let fragments = [];
         try {
@@ -1886,7 +1901,7 @@ A response is POOR only if completely off-topic or says it has no knowledge.
 Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": "one brief sentence"}`,
           },
           { role: "user", content: assessContent },
-        ], 80);
+        ], 1000);
 
         let result = { good: false, score: 0, feedback: "Could not parse assessment" };
         try { const m = rawResult.match(/\{[\s\S]*?\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
