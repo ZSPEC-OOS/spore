@@ -5,466 +5,595 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SPORE — System for Progressive Online Research & Evolution</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0a0a1a; color: #00f2ff; font-family: "Courier New", monospace; overflow: hidden; }
-    #canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
-    #ui {
-      position: fixed; top: 20px; left: 20px; z-index: 10;
-      width: 320px; max-height: calc(100vh - 40px);
-      background: rgba(10, 10, 26, 0.92);
-      border: 1px solid #00f2ff; border-radius: 10px; padding: 16px;
-      box-shadow: 0 0 24px rgba(0,242,255,0.2);
-      overflow-y: auto;
-      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
+    /* ── Reset ────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #07071a;
+      --surface: rgba(9,9,28,0.97);
+      --border:  rgba(0,242,255,0.2);
+      --cyan:    #00f2ff;
+      --green:   #00ff88;
+      --amber:   #ff8c00;
+      --red:     #ff4d4d;
+      --muted:   #7dcfdf;
+      --sb:      290px;   /* sidebar width */
+      --tb:      48px;    /* topbar height */
     }
-    #ui.panel-collapsed { transform: translateX(calc(-100% - 20px)); }
-    #ui::-webkit-scrollbar { width: 4px; }
-    #ui::-webkit-scrollbar-track { background: transparent; }
-    #ui::-webkit-scrollbar-thumb { background: #00f2ff44; border-radius: 4px; }
-    .stat { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; }
-    .row { display: flex; gap: 8px; margin-top: 8px; }
-    input, button, select {
-      width: 100%; background: transparent; border: 1px solid #00f2ff; color: #00f2ff;
-      padding: 8px; border-radius: 6px; font-family: inherit; font-size: 12px;
-    }
-    button { cursor: pointer; }
-    button:hover { background: #00f2ff; color: #0a0a1a; }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    button.btn-warn { border-color: #ff8c00; color: #ff8c00; }
-    button.btn-warn:hover { background: #ff8c00; color: #0a0a1a; }
-    button.btn-ok { border-color: #00ff88; color: #00ff88; }
-    button.btn-ok:hover { background: #00ff88; color: #0a0a1a; }
-    #log { margin-top: 10px; max-height: 100px; overflow: auto; font-size: 11px; }
-    #log div { margin-bottom: 4px; color: #8deaff; }
-    #log div.ok  { color: #00ff88; }
-    #log div.err { color: #ff4d4d; }
-    .section {
-      margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25);
-      padding-top: 10px;
-    }
-    .section h4 { font-size: 12px; margin-bottom: 6px; letter-spacing: .05em; display:flex; align-items:center; justify-content:space-between; }
-    .collapse-btn { cursor:pointer; font-size:10px; opacity:.5; transition:transform .2s,opacity .2s; user-select:none; padding:0 2px; }
-    .collapse-btn:hover { opacity:1; }
-    .collapse-btn.up { transform:rotate(180deg); }
-    #ai-collapsible { overflow:hidden; transition:max-height .25s ease; max-height:1000px; }
-    #ai-collapsible.closed { max-height:0; }
-    .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.4; }
-    .status-dot {
-      display: inline-block; width: 7px; height: 7px;
-      border-radius: 50%; margin-right: 5px; vertical-align: middle;
-    }
-    .status-dot.connected { background: #00ff88; box-shadow: 0 0 5px #00ff88; }
-    .status-dot.disconnected { background: #ff4d4d; }
-    .status-dot.pending { background: #ff8c00; animation: blink .8s step-end infinite; }
-    #diag-status, #fb-status { font-size: 11px; color: #8deaff; margin-top: 6px; min-height: 14px; }
-    #fb-status { margin-top: 4px; }
-    @keyframes blink { 50% { opacity: 0; } }
-    /* ── Training Sandbox ─────────────────────────────── */
-    #training-sandbox {
-      position: fixed; top: 20px; right: 20px; z-index: 10;
-      width: 300px; max-height: calc(100vh - 40px);
-      background: rgba(10,10,26,0.92);
-      border: 1px solid #ff8c00; border-radius: 10px; padding: 16px;
-      box-shadow: 0 0 24px rgba(255,140,0,0.18);
-      overflow-y: auto; font-family: "Courier New", monospace; font-size: 12px; color: #00f2ff;
-      transition: transform 0.38s cubic-bezier(0.4,0,0.2,1);
-    }
-    #training-sandbox.panel-collapsed { transform: translateX(calc(100% + 20px)); }
-    #training-sandbox::-webkit-scrollbar { width: 4px; }
-    #training-sandbox::-webkit-scrollbar-thumb { background: #ff8c0044; border-radius: 4px; }
-    #ts-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-    #ts-header h3 { font-size:13px; color:#ff8c00; }
-    .ts-metric { display:flex; justify-content:space-between; font-size:11px; margin-top:4px; color:#8deaff; }
-    .ts-metric span:last-child { color:#fff; }
-    #ts-status { margin-top:8px; font-size:11px; color:#ff8c00; min-height:14px; }
-    .ts-block { margin-top:10px; border-top:1px solid rgba(255,140,0,0.2); padding-top:8px; display:none; }
-    .ts-label { font-size:10px; color:#ff8c00; letter-spacing:.05em; margin-bottom:5px; }
-    .ts-text { color:#e0f7ff; line-height:1.6; font-size:11px; }
-    .ts-source { color:#8deaff; margin-top:3px; font-size:11px; }
-    .ts-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; }
-    .ts-badge.good { background:rgba(0,255,136,0.12); color:#00ff88; border:1px solid #00ff88; }
-    .ts-badge.poor { background:rgba(255,77,77,0.12); color:#ff4d4d; border:1px solid #ff4d4d; }
-    /* ── Training mode toggle ──────────────────────────── */
-    .ts-mode-btn {
-      flex:1; padding:5px 0; font-size:11px;
-      border:1px solid rgba(255,140,0,0.45); color:#ff8c00;
-      background:transparent; border-radius:4px; cursor:pointer;
-      font-family:"Courier New",monospace; transition:background .15s,color .15s;
-      letter-spacing:.03em; width:auto;
-    }
-    .ts-mode-btn.active { background:rgba(255,140,0,0.85); color:#0a0a1a; border-color:#ff8c00; }
-    .ts-mode-btn:hover:not(.active) { background:rgba(255,140,0,0.12); }
-    /* ── Reorganization flash ──────────────────────────── */
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--cyan); font-family: "Courier New", monospace; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,242,255,0.18); border-radius: 4px; }
+
+    @keyframes blink     { 50%{opacity:0} }
+    @keyframes fadeSlide { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:none} }
+    @keyframes pulse-sq  { 0%,100%{transform:scale(1)} 50%{transform:scale(1.35)} }
     @keyframes reorg-pulse {
-      0%,100% { box-shadow: 0 0 24px rgba(255,140,0,0.18); }
-      50%      { box-shadow: 0 0 52px rgba(255,210,0,0.75), inset 0 0 12px rgba(255,200,0,0.1); }
+      0%,100% { border-color: rgba(255,140,0,0.3); }
+      50%     { border-color: #ffcc00; box-shadow: inset 0 0 20px rgba(255,200,0,0.12); }
     }
-    #training-sandbox.reorg-active { animation: reorg-pulse 0.7s ease 4; }
-    /* ── Emergent Chat Interface ───────────────────────── */
-    #chat-panel {
-      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(0);
-      z-index: 10; width: 480px;
-      background: rgba(10,10,26,0.95);
-      border: 1px solid #00f2ff; border-bottom: none; border-radius: 12px 12px 0 0;
-      padding: 0; font-family: "Courier New", monospace; font-size: 12px; color: #00f2ff;
-      box-shadow: 0 -4px 32px rgba(0,242,255,0.18);
-      pointer-events: all; opacity: 1;
-      transition: transform 0.6s cubic-bezier(0.34,1.56,0.64,1), opacity 0.4s ease;
+
+    /* ── Topbar ───────────────────────────────────────────── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--tb); z-index: 100;
+      background: rgba(5,5,20,0.98); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; padding: 0 14px; gap: 0;
+      box-shadow: 0 2px 24px rgba(0,0,0,0.5);
     }
-    #chat-panel.emerged {
-      transform: translateX(-50%) translateY(0);
-      pointer-events: all; opacity: 1;
+    #tb-logo { font-size: 14px; letter-spacing: .06em; white-space: nowrap; flex-shrink: 0; }
+    #tb-sub  { font-size: 9px; color: var(--muted); letter-spacing: .04em; white-space: nowrap;
+               margin-left: 8px; opacity: .5; flex-shrink: 0; }
+    #tb-div  { width: 1px; background: var(--border); height: 26px; margin: 0 16px; flex-shrink: 0; }
+    #tb-stats { display: flex; gap: 22px; flex: 1; align-items: center; overflow: hidden; }
+    .tb-stat  { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 0; }
+    .tb-lbl   { font-size: 8px; color: var(--muted); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+    .tb-val   { font-size: 12px; color: #fff; font-weight: bold; white-space: nowrap; line-height: 1.3; }
+    #tb-ctrl  { display: flex; gap: 5px; align-items: center; flex-shrink: 0; margin-left: 14px; }
+
+    /* ── Sidebar panels ───────────────────────────────────── */
+    #ui, #training-sandbox {
+      position: fixed; top: var(--tb); bottom: 0; z-index: 20;
+      width: var(--sb); overflow-y: auto; overflow-x: hidden;
+      background: var(--surface); padding: 14px 13px;
+      transition: transform 0.34s cubic-bezier(.4,0,.2,1);
     }
-    #chat-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 14px 8px; border-bottom: 1px solid rgba(0,242,255,0.15);
+    #ui {
+      left: 0; border-right: 1px solid var(--border);
     }
-    #chat-header h3 { font-size: 13px; }
-    #chat-history {
-      height: 180px; overflow-y: auto; padding: 10px 14px;
-      display: flex; flex-direction: column; gap: 8px;
+    #training-sandbox {
+      right: 0; border-left: 1px solid rgba(255,140,0,0.25);
     }
-    #chat-history::-webkit-scrollbar { width: 4px; }
-    #chat-history::-webkit-scrollbar-thumb { background: #00f2ff33; border-radius: 4px; }
-    .chat-msg { display: flex; flex-direction: column; gap: 2px; max-width: 88%; }
-    .chat-msg.user { align-self: flex-end; align-items: flex-end; }
-    .chat-msg.spore { align-self: flex-start; }
-    .chat-role { font-size: 9px; color: #8deaff; letter-spacing: .04em; }
-    .chat-bubble {
-      padding: 6px 10px; border-radius: 8px; line-height: 1.55; font-size: 11px;
+    #ui.panel-collapsed              { transform: translateX(-100%); }
+    #training-sandbox.panel-collapsed{ transform: translateX(100%); }
+    #training-sandbox.reorg-active   { animation: reorg-pulse 0.65s ease 4; }
+
+    /* ── Canvas & Simple viz — fills space between sidebars ── */
+    #canvas, #simple-viz {
+      position: fixed; top: var(--tb); bottom: 0;
+      left: var(--sb); right: var(--sb);
+      transition: left 0.34s cubic-bezier(.4,0,.2,1), right 0.34s cubic-bezier(.4,0,.2,1);
     }
-    .chat-msg.user  .chat-bubble { background: rgba(0,242,255,0.12); color: #e0f7ff; border: 1px solid rgba(0,242,255,0.25); }
-    .chat-msg.spore .chat-bubble { background: rgba(0,128,255,0.1);  color: #c8f0ff; border: 1px solid rgba(0,128,255,0.2); }
-    #chat-input-row {
-      display: flex; gap: 8px; padding: 10px 14px 14px;
-      border-top: 1px solid rgba(0,242,255,0.12);
-    }
-    #chat-input {
-      flex: 1; background: rgba(0,242,255,0.06); border: 1px solid rgba(0,242,255,0.3);
-      border-radius: 6px; padding: 6px 10px; color: #e0f7ff; font-size: 12px;
-      font-family: "Courier New", monospace; outline: none;
-    }
-    #chat-input:focus { border-color: #00f2ff; box-shadow: 0 0 0 2px rgba(0,242,255,0.1); }
-    #chat-input::placeholder { color: #4a8a9a; }
-    #chat-send { width: auto; padding: 6px 14px; font-size: 11px; }
-    #chat-emergence-note {
-      font-size: 10px; color: #8deaff; text-align: center;
-      padding: 0 14px 6px; line-height: 1.5;
-    }
-    @keyframes chat-glow-pulse {
-      0%, 100% { box-shadow: 0 -4px 32px rgba(0,242,255,0.18); }
-      50%       { box-shadow: 0 -4px 48px rgba(0,242,255,0.5); }
-    }
-    #chat-panel.emerged { animation: chat-glow-pulse 1.5s ease 0.1s 2; }
-    #chat-panel.emerged.user-collapsed {
-      transform: translateX(-50%) translateY(100%);
-      pointer-events: none; opacity: 0;
-    }
-    /* ── Panel edge tabs ────────────────────────────────── */
-    .panel-tab {
-      position: fixed; z-index: 12;
-      background: rgba(10,10,26,0.92);
-      border: none; outline: none; cursor: pointer;
-      font-family: "Courier New", monospace; font-size: 10px;
-      letter-spacing: .1em; text-transform: uppercase;
-      display: flex; align-items: center; justify-content: center; gap: 5px;
-      transition: background 0.2s, box-shadow 0.2s;
-      user-select: none;
-    }
-    .panel-tab:hover { background: rgba(22,22,44,0.98); }
-    /* Left tab */
-    #ui-tab {
-      left: 0; top: 50vh; transform: translateY(-50%);
-      width: 22px; padding: 12px 0; flex-direction: column;
-      color: #00f2ff; border: 1px solid #00f2ff; border-left: none;
-      border-radius: 0 6px 6px 0;
-      box-shadow: 3px 0 14px rgba(0,242,255,0.14);
-      writing-mode: vertical-lr;
-    }
-    #ui-tab:hover { box-shadow: 3px 0 20px rgba(0,242,255,0.3); }
-    #ui-tab .tab-chevron { font-size: 9px; transition: transform 0.3s; }
-    #ui-tab.flipped .tab-chevron { transform: rotate(180deg); }
-    /* Right tab */
-    #ts-tab {
-      right: 0; top: 50vh; transform: translateY(-50%);
-      width: 22px; padding: 12px 0; flex-direction: column;
-      color: #ff8c00; border: 1px solid #ff8c00; border-right: none;
-      border-radius: 6px 0 0 6px;
-      box-shadow: -3px 0 14px rgba(255,140,0,0.14);
-      writing-mode: vertical-lr;
-    }
-    #ts-tab:hover { box-shadow: -3px 0 20px rgba(255,140,0,0.3); }
-    #ts-tab .tab-chevron { font-size: 9px; transition: transform 0.3s; }
-    #ts-tab.flipped .tab-chevron { transform: rotate(180deg); }
-    /* Bottom chat tab */
-    #chat-tab {
-      bottom: 0; left: 50%; transform: translateX(-50%);
-      height: 26px; padding: 0 20px; flex-direction: row;
-      color: #00f2ff; border: 1px solid #00f2ff; border-bottom: none;
-      border-radius: 8px 8px 0 0;
-      box-shadow: 0 -3px 14px rgba(0,242,255,0.14);
-      opacity: 1; pointer-events: all;
-      transition: opacity 0.4s ease, box-shadow 0.2s;
-    }
-    #chat-tab.tab-visible { opacity: 1; pointer-events: all; }
-    #chat-tab:hover { box-shadow: 0 -3px 22px rgba(0,242,255,0.35); }
-    #chat-tab .tab-arrow { font-size: 10px; transition: transform 0.3s; }
+    body.ui-hidden   #canvas, body.ui-hidden   #simple-viz { left:  0; }
+    body.ts-hidden   #canvas, body.ts-hidden   #simple-viz { right: 0; }
     #canvas { cursor: grab; }
     #canvas.dragging { cursor: grabbing; }
-    #reset-view {
-      position: fixed; bottom: 20px; right: 20px; z-index: 10;
-      width: auto; padding: 8px 14px;
+
+    /* ── Panel edge tabs ──────────────────────────────────── */
+    #ui-tab, #ts-tab {
+      position: fixed; top: 50vh; z-index: 30;
+      width: 20px; height: 68px;
+      background: var(--surface);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none; border: none; outline: none;
+      font-family: "Courier New", monospace; font-size: 8px;
+      letter-spacing: .1em; text-transform: uppercase;
+      writing-mode: vertical-lr;
+      transition: left 0.34s cubic-bezier(.4,0,.2,1),
+                  right 0.34s cubic-bezier(.4,0,.2,1), box-shadow 0.2s;
     }
-    #neuron-panel {
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      width: 360px; max-width: calc(100vw - 40px);
-      background: rgba(10,10,26,0.96); border: 1px solid #00f2ff;
-      border-radius: 10px; padding: 16px; z-index: 20;
-      display: none; font-size: 12px;
-      box-shadow: 0 0 28px rgba(0,242,255,0.25);
+    #ui-tab {
+      left: var(--sb); transform: translateY(-50%);
+      color: var(--cyan); border: 1px solid var(--border); border-left: none;
+      border-radius: 0 5px 5px 0;
+      box-shadow: 3px 0 12px rgba(0,242,255,0.12);
     }
-    #neuron-panel.visible { display: block; }
-    #neuron-panel h4 { font-size: 14px; margin-bottom: 10px; color: #00f2ff; word-break: break-word; }
-    .np-row { display: flex; justify-content: space-between; margin-top: 5px; color: #8deaff; }
-    .np-row span:last-child { color: #fff; }
-    #np-snippet { margin-top: 10px; color: #8deaff; line-height: 1.5; max-height: 160px; overflow-y: auto; }
-    #np-snippet .np-entry { border-top: 1px solid rgba(0,242,255,0.12); padding: 6px 0; font-size: 11px; }
-    #np-snippet .np-entry:first-child { border-top: none; }
-    #np-snippet .np-entry a { color: #00f2ff; font-size: 10px; word-break: break-all; }
-    #np-url { display: block; margin-top: 10px; color: #00f2ff; word-break: break-all; text-decoration: underline; }
-    #np-close { float: right; cursor: pointer; opacity: .6; font-size: 14px; margin: -4px -4px 0 0; }
-    #np-close:hover { opacity: 1; }
-    /* ── Canvas overlay controls (pause / hide) ─────────── */
-    #canvas-controls {
-      position: fixed; top: 14px; right: 52px; z-index: 15;
-      display: flex; gap: 6px; align-items: center;
+    #ui-tab:hover { box-shadow: 3px 0 18px rgba(0,242,255,0.28); }
+    body.ui-hidden #ui-tab { left: 0; }
+    .tab-chevron { font-size: 8px; transition: transform .28s; }
+    #ui-tab.flipped .tab-chevron { transform: rotate(180deg); }
+
+    #ts-tab {
+      right: var(--sb); transform: translateY(-50%);
+      color: var(--amber); border: 1px solid rgba(255,140,0,0.35); border-right: none;
+      border-radius: 5px 0 0 5px;
+      box-shadow: -3px 0 12px rgba(255,140,0,0.1);
     }
+    #ts-tab:hover { box-shadow: -3px 0 18px rgba(255,140,0,0.26); }
+    body.ts-hidden #ts-tab { right: 0; }
+    #ts-tab.flipped .tab-chevron { transform: rotate(180deg); }
+
+    /* ── Common form elements ─────────────────────────────── */
+    input, button, select {
+      width: 100%; background: transparent; border: 1px solid var(--border);
+      color: var(--cyan); padding: 7px 9px; border-radius: 5px;
+      font-family: inherit; font-size: 11px;
+    }
+    button { cursor: pointer; transition: background .14s, color .14s, box-shadow .14s; }
+    button:hover     { background: var(--cyan); color: var(--bg); }
+    button:disabled  { opacity: .38; cursor: not-allowed; }
+    button.btn-warn  { border-color: var(--amber); color: var(--amber); }
+    button.btn-warn:hover { background: var(--amber); color: var(--bg); }
+    button.btn-ok    { border-color: var(--green);  color: var(--green);  }
+    button.btn-ok:hover   { background: var(--green);  color: var(--bg);  }
+
     .cvs-btn {
-      padding: 5px 11px; font-size: 10px; letter-spacing: .07em;
-      text-transform: uppercase; border-radius: 5px; cursor: pointer;
-      font-family: "Courier New", monospace; user-select: none;
-      background: rgba(10,10,26,0.88); border: 1px solid rgba(0,242,255,0.35);
-      color: rgba(0,242,255,0.75); transition: background .15s, box-shadow .15s, color .15s;
+      padding: 5px 11px; font-size: 9px; letter-spacing: .07em; text-transform: uppercase;
+      border-radius: 5px; cursor: pointer; font-family: inherit; user-select: none; width: auto;
+      background: rgba(8,8,24,.9); border: 1px solid rgba(0,242,255,.28); color: rgba(0,242,255,.65);
+      transition: background .14s, box-shadow .14s, color .14s; white-space: nowrap;
     }
-    .cvs-btn:hover { box-shadow: 0 0 10px rgba(0,242,255,0.22); color: #00f2ff; }
-    .cvs-btn.active {
-      background: rgba(0,242,255,0.13); border-color: #00f2ff; color: #00f2ff;
-      box-shadow: 0 0 14px rgba(0,242,255,0.28);
+    .cvs-btn:hover  { box-shadow: 0 0 10px rgba(0,242,255,.22); color: var(--cyan); }
+    .cvs-btn.active { background: rgba(0,242,255,.12); border-color: var(--cyan); color: var(--cyan);
+                      box-shadow: 0 0 12px rgba(0,242,255,.26); }
+
+    /* ── Left sidebar — AI Config ─────────────────────────── */
+    #ui h3 { font-size: 12px; letter-spacing: .04em; margin-bottom: 2px; }
+    .stat  { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
+    .stat span:first-child { color: var(--muted); }
+    .stat span:last-child  { color: #fff; }
+    .row   { display: flex; gap: 7px; margin-top: 7px; }
+    .section { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(0,242,255,.13); }
+    .section h4 { font-size: 10px; margin-bottom: 6px; letter-spacing: .05em; color: var(--muted);
+                  display: flex; align-items: center; justify-content: space-between; text-transform: uppercase; }
+    .collapse-btn { cursor: pointer; font-size: 9px; opacity: .5; transition: transform .2s, opacity .2s;
+                    user-select: none; padding: 0 2px; }
+    .collapse-btn:hover { opacity: 1; }
+    .collapse-btn.up { transform: rotate(180deg); }
+    #ai-collapsible { overflow: hidden; transition: max-height .24s ease; max-height: 1000px; }
+    #ai-collapsible.closed { max-height: 0; }
+    .hint { font-size: 9px; color: var(--muted); margin-top: 5px; line-height: 1.45; opacity: .65; }
+    .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+                  margin-right: 4px; vertical-align: middle; }
+    .status-dot.connected    { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .status-dot.disconnected { background: var(--red); }
+    .status-dot.pending      { background: var(--amber); animation: blink .8s step-end infinite; }
+    #diag-status, #fb-status { font-size: 10px; color: var(--muted); margin-top: 5px; min-height: 13px; }
+    #kimi-label { font-size: 9px; color: var(--muted); margin-top: 2px; min-height: 12px; opacity: .65; }
+    #log { margin-top: 10px; max-height: 88px; overflow-y: auto; font-size: 10px;
+           border-top: 1px solid rgba(0,242,255,.1); padding-top: 6px; }
+    #log div      { margin-bottom: 3px; color: var(--muted); }
+    #log div.ok   { color: var(--green); }
+    #log div.err  { color: var(--red); }
+    #log div.warn { color: var(--amber); }
+
+    /* ── Right sidebar — Training Sandbox ────────────────── */
+    #ts-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    #ts-header h3 { font-size: 12px; color: var(--amber); letter-spacing: .04em; }
+    .ts-metric { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
+    .ts-metric span:first-child { color: var(--muted); }
+    .ts-metric span:last-child  { color: #fff; }
+    #ts-status { margin-top: 8px; font-size: 10px; color: var(--amber); min-height: 14px; line-height: 1.45; }
+    .ts-block { margin-top: 10px; border-top: 1px solid rgba(255,140,0,.14); padding-top: 8px; display: none; }
+    .ts-label { font-size: 9px; color: var(--amber); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+    .ts-text  { color: #ddf4ff; line-height: 1.6; font-size: 11px; }
+    .ts-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+    .ts-badge.good { background: rgba(0,255,136,.1);  color: var(--green); border: 1px solid var(--green); }
+    .ts-badge.poor { background: rgba(255,77,77,.1);  color: var(--red);   border: 1px solid var(--red);   }
+    .ts-mode-btn {
+      flex: 1; padding: 5px 0; font-size: 10px; border: 1px solid rgba(255,140,0,.4); color: var(--amber);
+      background: transparent; border-radius: 4px; cursor: pointer; font-family: inherit;
+      transition: background .14s, color .14s; letter-spacing: .03em; width: auto;
     }
-    /* ── Simple Visualizer ─────────────────────────────── */
+    .ts-mode-btn.active { background: rgba(255,140,0,.82); color: var(--bg); border-color: var(--amber); }
+    .ts-mode-btn:hover:not(.active) { background: rgba(255,140,0,.1); }
+    #ts-reset-btn {
+      width: 100%; margin-top: 6px; padding: 5px 0; font-size: 10px; letter-spacing: .06em;
+      text-transform: uppercase; background: transparent; border: 1px solid rgba(255,77,77,.38);
+      color: rgba(255,100,100,.75); border-radius: 4px; cursor: pointer; font-family: inherit;
+      transition: background .14s, color .14s;
+    }
+    #ts-reset-btn:hover { background: rgba(255,77,77,.12); color: var(--red); }
+
+    /* ── Simple Visualizer ────────────────────────────────── */
     #simple-viz {
-      position: fixed; inset: 0; z-index: 1; background: #0a0a1a;
-      display: flex; flex-direction: column;
-      padding: 56px 340px 60px 340px;
-      font-family: "Courier New", monospace; overflow: hidden;
+      background: var(--bg); display: flex; flex-direction: column; overflow: hidden;
+      font-family: "Courier New", monospace;
+    }
+
+    /* Stat cards row */
+    #sv-statbar {
+      display: flex; flex-shrink: 0; border-bottom: 1px solid rgba(0,242,255,.1);
+      background: rgba(6,6,22,.7);
+    }
+    .sv-card {
+      flex: 1; padding: 8px 10px; text-align: center;
+      border-right: 1px solid rgba(0,242,255,.07);
+    }
+    .sv-card:last-child { border-right: none; }
+    .sv-card-lbl { font-size: 8px; color: var(--muted); letter-spacing: .07em; text-transform: uppercase; }
+    .sv-card-val { font-size: 17px; color: #fff; font-weight: bold; margin-top: 2px; line-height: 1.1; }
+    .sv-card-sub { font-size: 8px; color: var(--muted); margin-top: 2px; opacity: .55; }
+
+    /* Body row */
+    #sv-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+    /* Dot grid */
+    #sv-grid-wrap {
+      flex: 1; min-width: 0; display: flex; flex-direction: column;
+      padding: 10px; overflow: hidden;
     }
     #sv-header {
-      display: flex; gap: 14px; align-items: center; flex-shrink: 0;
-      font-size: 11px; color: #8deaff; margin-bottom: 10px;
-      border-bottom: 1px solid rgba(0,242,255,0.12); padding-bottom: 8px;
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+      margin-bottom: 8px; font-size: 10px; color: var(--muted);
     }
-    #sv-title { font-size: 13px; color: #00f2ff; letter-spacing: .04em; }
-    #sv-live-dot { color: #00ff88; animation: blink .8s step-end infinite; }
+    #sv-title    { font-size: 11px; color: var(--cyan); letter-spacing: .04em; }
+    #sv-live-dot { color: var(--green); font-size: 10px; animation: blink .8s step-end infinite; display: none; }
     #sv-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, 18px);
-      gap: 4px;
-      overflow-y: auto; align-content: start; flex: 1;
-      padding: 4px;
+      flex: 1; overflow-y: auto;
+      display: grid; grid-template-columns: repeat(auto-fill, 22px); gap: 4px; align-content: start;
     }
-    #sv-grid::-webkit-scrollbar { width: 4px; }
-    #sv-grid::-webkit-scrollbar-thumb { background: #00f2ff22; border-radius: 4px; }
     .sv-dot {
-      width: 18px; height: 18px; border-radius: 3px;
-      background: rgba(0,242,255,0.18);
-      transition: background 0.4s, box-shadow 0.4s, transform 0.2s;
-      cursor: default; position: relative;
+      width: 22px; height: 22px; border-radius: 4px;
+      background: rgba(0,242,255,.14); cursor: pointer;
+      transition: background .35s, box-shadow .35s, transform .18s;
     }
-    .sv-dot.sv-dst { background: rgba(255,140,0,0.22); }
+    .sv-dot:hover     { transform: scale(1.3); z-index: 2; position: relative; }
+    .sv-dot.sv-dst    { background: rgba(255,140,0,.18); }
     .sv-dot.sv-active {
-      background: #00f2ff; box-shadow: 0 0 8px #00f2ffaa; transform: scale(1.15);
+      background: var(--cyan); box-shadow: 0 0 9px rgba(0,242,255,.65);
+      animation: pulse-sq .55s ease 1;
     }
-    .sv-dot.sv-dst.sv-active { background: #ff8c00; box-shadow: 0 0 8px #ff8c00aa; transform: scale(1.15); }
-    /* knowledge-level brightness via inline opacity set in JS */
-    #sv-overflow { font-size: 10px; color: #8deaff55; text-align: center; padding: 4px 0; }
+    .sv-dot.sv-dst.sv-active { background: var(--amber); box-shadow: 0 0 9px rgba(255,140,0,.65); }
+    #sv-overflow { font-size: 9px; color: rgba(0,242,255,.25); text-align: center; padding: 3px 0; flex-shrink: 0; }
+
+    /* Activity feed */
+    #sv-feed-panel {
+      width: 210px; flex-shrink: 0;
+      border-left: 1px solid rgba(0,242,255,.08);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .sv-panel-title {
+      font-size: 9px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase;
+      padding: 7px 10px 6px; border-bottom: 1px solid rgba(0,242,255,.08); flex-shrink: 0; opacity: .7;
+    }
+    #sv-feed { flex: 1; overflow-y: auto; padding: 5px 7px; display: flex; flex-direction: column; gap: 3px; }
+    .sv-feed-item {
+      font-size: 9px; color: var(--muted); line-height: 1.4; padding: 3px 6px; border-radius: 3px;
+      background: rgba(0,242,255,.025); border-left: 2px solid rgba(0,242,255,.15);
+      animation: fadeSlide .25s ease;
+    }
+    .sv-feed-item.ok   { border-left-color: var(--green); color: rgba(0,255,136,.75); }
+    .sv-feed-item.err  { border-left-color: var(--red);   color: rgba(255,77,77,.75); }
+    .sv-feed-item.warn { border-left-color: var(--amber); color: rgba(255,140,0,.75); }
+
+    /* Score chart + level */
+    #sv-score-panel {
+      width: 150px; flex-shrink: 0;
+      border-left: 1px solid rgba(255,140,0,.1);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #sv-score-title { font-size: 9px; color: rgba(255,140,0,.55); letter-spacing: .08em; text-transform: uppercase;
+                      padding: 7px 10px 6px; border-bottom: 1px solid rgba(255,140,0,.08); flex-shrink: 0; }
+    #sv-score-chart {
+      flex: 1; padding: 8px 8px 4px; display: flex; align-items: flex-end; gap: 3px; overflow: hidden;
+      min-height: 60px;
+    }
+    .sv-bar { flex: 1; border-radius: 2px 2px 0 0; min-height: 2px; transition: height .35s ease, background .35s; }
+    #sv-lvl-section { padding: 8px 10px; border-top: 1px solid rgba(255,140,0,.09); flex-shrink: 0; }
+    #sv-lvl-lbl  { font-size: 8px; color: rgba(255,140,0,.6); letter-spacing: .06em; text-transform: uppercase; }
+    #sv-lvl-track{ margin-top: 5px; height: 4px; border-radius: 2px; background: rgba(255,140,0,.1); overflow: hidden; }
+    #sv-lvl-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--amber), #ffcc00);
+                   transition: width .55s ease; width: 0%; }
+    #sv-lvl-name { margin-top: 4px; font-size: 9px; color: rgba(255,200,0,.65); }
+    #sv-readiness{ margin-top: 5px; font-size: 11px; color: #fff; }
+
+    /* ── Chat panel ───────────────────────────────────────── */
+    #chat-panel {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      z-index: 50; width: 500px; max-width: calc(100vw - 32px);
+      background: var(--surface); border: 1px solid var(--border); border-bottom: none;
+      border-radius: 11px 11px 0 0;
+      box-shadow: 0 -4px 32px rgba(0,242,255,.15);
+      transition: transform .38s ease, opacity .3s;
+    }
+    #chat-panel.user-collapsed { transform: translateX(-50%) translateY(100%); pointer-events: none; opacity: 0; }
+    #chat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px 8px; border-bottom: 1px solid rgba(0,242,255,.12);
+    }
+    #chat-header h3 { font-size: 12px; }
+    #chat-history { height: 180px; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .chat-msg { display: flex; flex-direction: column; gap: 2px; max-width: 88%; }
+    .chat-msg.user  { align-self: flex-end; align-items: flex-end; }
+    .chat-msg.spore { align-self: flex-start; }
+    .chat-role   { font-size: 8px; color: var(--muted); letter-spacing: .04em; }
+    .chat-bubble { padding: 6px 10px; border-radius: 8px; line-height: 1.55; font-size: 11px; }
+    .chat-msg.user  .chat-bubble { background: rgba(0,242,255,.09); color: #e0f7ff; border: 1px solid rgba(0,242,255,.2); }
+    .chat-msg.spore .chat-bubble { background: rgba(0,128,255,.07); color: #c8f0ff; border: 1px solid rgba(0,128,255,.17); }
+    #chat-input-row {
+      display: flex; gap: 8px; padding: 9px 14px 13px; border-top: 1px solid rgba(0,242,255,.1);
+    }
+    #chat-input {
+      flex: 1; background: rgba(0,242,255,.04); border: 1px solid rgba(0,242,255,.22); border-radius: 5px;
+      padding: 6px 10px; color: #e0f7ff; font-size: 11px; font-family: inherit; outline: none;
+    }
+    #chat-input:focus { border-color: var(--cyan); }
+    #chat-input::placeholder { color: rgba(125,207,223,.35); }
+    #chat-send  { width: auto; padding: 6px 14px; font-size: 11px; }
+    #chat-emergence-note { font-size: 9px; color: var(--muted); text-align: center; padding: 0 14px 5px; opacity: .55; }
+
+    /* Chat tab */
+    #chat-tab {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      z-index: 52; height: 23px; padding: 0 18px;
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border); border-bottom: none;
+      border-radius: 8px 8px 0 0; cursor: pointer; user-select: none; color: var(--cyan);
+      font-family: inherit; font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+      box-shadow: 0 -3px 12px rgba(0,242,255,.1); transition: box-shadow .2s;
+    }
+    #chat-tab:hover { box-shadow: 0 -3px 20px rgba(0,242,255,.28); }
+    .tab-arrow { font-size: 9px; transition: transform .28s; }
+
+    /* ── Neuron detail popup ───────────────────────────────── */
+    #neuron-panel {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      width: 360px; max-width: calc(100vw - 32px); z-index: 60;
+      background: rgba(6,6,22,.99); border: 1px solid var(--border);
+      border-radius: 9px; padding: 15px; display: none; font-size: 11px;
+      box-shadow: 0 0 28px rgba(0,242,255,.22);
+    }
+    #neuron-panel.visible { display: block; }
+    #neuron-panel h4 { font-size: 13px; margin-bottom: 9px; color: var(--cyan); word-break: break-word; }
+    .np-row { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; }
+    .np-row span:first-child { color: var(--muted); }
+    .np-row span:last-child  { color: #fff; }
+    #np-snippet { margin-top: 9px; color: var(--muted); line-height: 1.5; max-height: 150px; overflow-y: auto; }
+    #np-snippet .np-entry { border-top: 1px solid rgba(0,242,255,.1); padding: 5px 0; font-size: 10px; }
+    #np-snippet .np-entry:first-child { border-top: none; }
+    #np-snippet .np-entry a { color: var(--cyan); font-size: 9px; word-break: break-all; }
+    #np-close { float: right; cursor: pointer; opacity: .55; font-size: 14px; margin: -3px -3px 0 0; }
+    #np-close:hover { opacity: 1; }
+
+    /* ── Reset view button ────────────────────────────────── */
+    #reset-view {
+      position: fixed; bottom: 14px; right: 14px; z-index: 40;
+      width: auto; padding: 6px 12px; font-size: 10px;
+    }
   </style>
 </head>
 <body>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- TOP BAR                                               -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <header id="topbar">
+    <span id="tb-logo">🧠 SPORE</span>
+    <span id="tb-sub">System for Progressive Online Research &amp; Evolution</span>
+    <div id="tb-div"></div>
+    <div id="tb-stats">
+      <div class="tb-stat"><span class="tb-lbl">Phase</span><span class="tb-val" id="phase">Init</span></div>
+      <div class="tb-stat"><span class="tb-lbl">Level</span><span class="tb-val" id="level-display">1 — Greetings</span></div>
+      <div class="tb-stat"><span class="tb-lbl">Neurons</span><span class="tb-val" id="neurons">6</span></div>
+      <div class="tb-stat"><span class="tb-lbl">Synapses</span><span class="tb-val" id="synapses">5</span></div>
+      <div class="tb-stat"><span class="tb-lbl">Memory</span><span class="tb-val" id="knowledge">0.0 MB</span></div>
+    </div>
+    <div id="tb-ctrl">
+      <button class="cvs-btn active" id="btn-viz-simple">⬡ Simple</button>
+      <button class="cvs-btn"        id="btn-viz-complex">◈ Complex</button>
+      <button class="cvs-btn" id="btn-anim-pause" style="display:none">⏸ Pause</button>
+      <button class="cvs-btn" id="btn-hide-brain" style="display:none">◉ Hide</button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- CANVAS (complex mode)                                 -->
+  <!-- ══════════════════════════════════════════════════════ -->
   <canvas id="canvas"></canvas>
 
-  <!-- ── Simple Visualizer (default, lightweight) ─────── -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- SIMPLE VISUALIZER                                     -->
+  <!-- ══════════════════════════════════════════════════════ -->
   <div id="simple-viz">
-    <div id="sv-header">
-      <span id="sv-title">🧠 SPORE</span>
-      <span id="sv-neuron-ct">0 neurons</span>
-      <span id="sv-synapse-ct">0 synapses</span>
-      <span id="sv-phase-txt"></span>
-      <span id="sv-live-dot" style="display:none">● LIVE</span>
+
+    <!-- Stat cards -->
+    <div id="sv-statbar">
+      <div class="sv-card">
+        <div class="sv-card-lbl">Neurons</div>
+        <div class="sv-card-val" id="sv-neuron-ct">0</div>
+        <div class="sv-card-sub">nodes</div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-card-lbl">Synapses</div>
+        <div class="sv-card-val" id="sv-synapse-ct">0</div>
+        <div class="sv-card-sub">links</div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-card-lbl">Status</div>
+        <div class="sv-card-val" id="sv-phase-txt" style="font-size:11px">—</div>
+        <div class="sv-card-sub" id="sv-live-dot">● LIVE</div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-card-lbl">Avg Score</div>
+        <div class="sv-card-val" id="sv-avg-score">—</div>
+        <div class="sv-card-sub">last 20</div>
+      </div>
+      <div class="sv-card">
+        <div class="sv-card-lbl">Readiness</div>
+        <div class="sv-card-val" id="sv-readiness" style="font-size:11px">—</div>
+        <div class="sv-card-sub">training</div>
+      </div>
     </div>
-    <div id="sv-grid"></div>
-    <div id="sv-overflow"></div>
-  </div>
 
-  <!-- ── Canvas overlay controls ──────────────────────── -->
-  <div id="canvas-controls">
-    <button class="cvs-btn active" id="btn-viz-simple" title="Simple view — lightweight, no canvas (default)">⬡ Simple</button>
-    <button class="cvs-btn"        id="btn-viz-complex" title="Complex canvas view — full neural animation">◈ Complex</button>
-    <button class="cvs-btn" id="btn-anim-pause" title="Pause / resume the visual animation" style="display:none">⏸ Pause</button>
-    <button class="cvs-btn" id="btn-hide-brain" title="Hide the neural canvas to free up GPU/CPU" style="display:none">◉ Hide Brain</button>
-  </div>
+    <!-- Body -->
+    <div id="sv-body">
 
+      <!-- Dot grid -->
+      <div id="sv-grid-wrap">
+        <div id="sv-header">
+          <span id="sv-title">🧠 Neural Map</span>
+          <span style="opacity:.5">· hover to inspect · cyan = general · amber = distilled</span>
+        </div>
+        <div id="sv-grid"></div>
+        <div id="sv-overflow"></div>
+      </div>
+
+      <!-- Activity feed -->
+      <div id="sv-feed-panel">
+        <div class="sv-panel-title">▸ Activity Feed</div>
+        <div id="sv-feed"></div>
+      </div>
+
+      <!-- Score chart + level progress -->
+      <div id="sv-score-panel">
+        <div id="sv-score-title" class="sv-panel-title">▸ Score History</div>
+        <div id="sv-score-chart"></div>
+        <div id="sv-lvl-section">
+          <div id="sv-lvl-lbl">Level Progress</div>
+          <div id="sv-lvl-track"><div id="sv-lvl-fill"></div></div>
+          <div id="sv-lvl-name">Level 1 — Greetings</div>
+          <div id="sv-readiness-text">—</div>
+        </div>
+      </div>
+
+    </div><!-- #sv-body -->
+  </div><!-- #simple-viz -->
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- LEFT SIDEBAR — AI Config                              -->
+  <!-- ══════════════════════════════════════════════════════ -->
   <aside id="ui">
-    <h3>🧠 SPORE</h3>
-    <p style="font-size:9px;color:#8deaff;margin:0 0 6px;letter-spacing:.04em">System for Progressive Online Research &amp; Evolution</p>
-    <div class="stat"><span>Phase</span><span id="phase">Initialization</span></div>
-    <div class="stat"><span>Neurons</span><span id="neurons">6</span></div>
-    <div class="stat"><span>Synapses</span><span id="synapses">5</span></div>
-    <div class="stat"><span>Knowledge</span><span id="knowledge">0.0 MB</span></div>
-    <div class="stat"><span>Level</span><span id="level-display">1 — Greetings</span></div>
-    <div class="row"><button id="general">Learn General</button><button id="pause">Pause/Resume</button></div>
+    <h3>AI Config</h3>
+    <p style="font-size:9px;color:var(--muted);margin:0 0 8px;opacity:.55;letter-spacing:.03em">search &amp; crawl model</p>
+
+    <div class="row"><button id="general">▶ Learn General</button><button id="pause">⏸ Pause</button></div>
     <div class="row"><input id="topic" placeholder="topic e.g. quantum computing" /></div>
-    <div class="row"><button id="specialize">Specialize Topic</button><button id="ask">Ask</button></div>
+    <div class="row"><button id="specialize">⚙ Specialize</button><button id="ask">? Ask</button></div>
 
-    <!-- ── AI Model Config ─────────────────────────────── -->
     <section class="section" id="ai-config">
-      <h4>AI Model Config (Search/Crawl) <span class="collapse-btn" id="ai-collapse-btn">▼</span></h4>
-    <div id="ai-collapsible">
-      <div class="row"><input id="ai-name" placeholder="Name" /></div>
-      <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2.5" /></div>
-      <div class="row" style="align-items:center">
-        <input id="ai-base-url" placeholder="Base URL" />
-        <button id="find-url" title="Cycle Kimi K2.5 endpoints" style="width:auto;flex-shrink:0;padding:8px 8px;white-space:nowrap">Find ⟳</button>
+      <h4>Model <span class="collapse-btn" id="ai-collapse-btn">▼</span></h4>
+      <div id="ai-collapsible">
+        <div class="row"><input id="ai-name" placeholder="Name" /></div>
+        <div class="row"><input id="ai-model" placeholder="Model ID" value="kimi-k2-turbo-preview" /></div>
+        <div class="row" style="align-items:center">
+          <input id="ai-base-url" placeholder="Base URL" />
+          <button id="find-url" style="width:auto;flex-shrink:0;padding:7px 8px;white-space:nowrap">Find ⟳</button>
+        </div>
+        <div id="kimi-label"></div>
+        <div class="row"><input id="ai-api-key" placeholder="API Key" type="password" /></div>
+        <div class="row"><button id="save-ai-config">Save Config</button></div>
+        <p class="hint">Saved locally &amp; to Firebase. CLI: <code>ai config</code></p>
       </div>
-      <div id="kimi-label" style="font-size:10px;color:#8deaff;margin-top:2px;min-height:13px"></div>
-      <div class="row"><input id="ai-api-key" placeholder="API Key" type="password" /></div>
-      <div class="row"><button id="save-ai-config">Save Config</button></div>
-      <p class="hint">Saved locally &amp; to Firebase (when connected). Backend CLI: <code>ai config</code></p>
     </section>
 
-    <!-- ── Diagnostics ────────────────────────────────── -->
-    <section class="section" id="diagnostics">
+    <section class="section">
       <h4>Diagnostics</h4>
-      <div class="row">
-        <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
-      </div>
+      <div class="row"><button id="test-ai" class="btn-warn">🧪 Test AI</button></div>
       <div id="diag-status"></div>
-      <p class="hint">Both tests run directly from your browser — no server needed.</p>
     </section>
 
-    <!-- ── Firebase API Key Storage ───────────────────── -->
-    <section class="section" id="firebase-section">
-      <h4>🔥 Firebase Key Storage</h4>
+    <section class="section">
+      <h4>🔥 Firebase</h4>
       <div class="row">
         <button id="fb-push" disabled>⬆ Push Keys</button>
         <button id="fb-pull" disabled>⬇ Pull Keys</button>
       </div>
       <div id="fb-status"><span class="status-dot pending"></span>Connecting…</div>
-      <p class="hint">
-        Auto-connected to <code>spore-2d34f</code>. AI keys stored in
-        Firestore at <code>spore_config/api_keys</code>.
-        SPORE's knowledge graph stays local for privacy.
-      </p>
+      <p class="hint">Auto-connected to <code>spore-2d34f</code>. Keys in Firestore <code>spore_config/api_keys</code>.</p>
     </section>
 
-      <div id="log"></div>
-    </div><!-- /#ai-collapsible -->
-
-    <!-- ── Brain Storage ──────────────────────────────── -->
-    <section class="section" id="brain-storage">
+    <section class="section">
       <h4>🗂 Brain Storage</h4>
-      <div style="font-size:10px;color:#8deaff;letter-spacing:.05em;margin-bottom:5px">☁ FIREBASE CLOUD</div>
+      <div style="font-size:9px;color:var(--muted);letter-spacing:.05em;margin-bottom:5px;opacity:.6">☁ FIREBASE CLOUD</div>
       <div class="row">
         <button id="fb-save-brain">☁ Save All</button>
         <button id="fb-load-brain">☁ Load</button>
       </div>
-      <div id="fb-sync-status" style="font-size:10px;color:#8deaff;margin-top:4px;min-height:13px">Auto-syncs index after each training cycle</div>
+      <div id="fb-sync-status" style="font-size:9px;color:var(--muted);margin-top:4px;min-height:12px;opacity:.65">Auto-syncs after training</div>
     </section>
+
+    <div id="log"></div>
   </aside>
 
-  <!-- ── Panel edge tabs ──────────────────────────────── -->
-  <button class="panel-tab" id="ui-tab" aria-label="Toggle AI Config panel">
-    <span class="tab-chevron">◂</span>
-    <span>AI&nbsp;CFG</span>
-  </button>
-  <button class="panel-tab" id="ts-tab" aria-label="Toggle Training panel">
-    <span>TRAIN</span>
-    <span class="tab-chevron">▸</span>
-  </button>
-  <button class="panel-tab" id="chat-tab" aria-label="Toggle chat panel">
-    <span class="tab-arrow">↓</span>
-    <span>💬 SPORE CHAT</span>
-  </button>
-
-  <!-- ── Training Sandbox (upper right) ──────────────── -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- RIGHT SIDEBAR — Training Sandbox                      -->
+  <!-- ══════════════════════════════════════════════════════ -->
   <div id="training-sandbox">
     <div id="ts-header">
-      <h3>🎓 Training Sandbox</h3>
-      <span id="ts-live-badge" style="font-size:10px;color:#8deaff;opacity:0.6">● idle</span>
+      <h3>🎓 Training</h3>
+      <span id="ts-live-badge" style="font-size:10px;color:var(--muted);opacity:.55">● idle</span>
     </div>
     <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
     <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
     <div class="ts-metric"><span>🧬 ML Corpus</span><span id="ts-ml-corpus">—</span></div>
     <div class="ts-metric"><span>Avg Score</span><span id="ts-avg-score">—</span></div>
     <div class="ts-metric"><span>Readiness</span><span id="ts-readiness">—</span></div>
-    <button id="ts-reset-btn" style="width:100%;margin-top:6px;padding:5px 0;font-size:10px;
-      letter-spacing:.07em;text-transform:uppercase;background:transparent;
-      border:1px solid rgba(255,77,77,0.45);color:rgba(255,100,100,0.8);
-      border-radius:4px;cursor:pointer;font-family:'Courier New',monospace;
-      transition:background .15s,color .15s"
-      title="Reset training cycle counter and score history (does not delete neurons)">
-      ↺ Reset Cycle Counter
-    </button>
+    <button id="ts-reset-btn" title="Reset cycle counter and score history — does not delete neurons">↺ Reset Counter</button>
     <div id="ts-status">Idle — attach AI model to begin</div>
 
     <div class="ts-block" id="ts-q-block">
-      <div class="ts-label">❓ QUESTION</div>
+      <div class="ts-label">❓ Question</div>
       <div class="ts-text" id="ts-question"></div>
     </div>
     <div class="ts-block" id="ts-distill-block">
-      <div class="ts-label">⚗ DISTILLED FRAGMENTS (closed-loop)</div>
+      <div class="ts-label">⚗ Distilled Fragments</div>
       <div id="ts-distill-list"></div>
     </div>
     <div class="ts-block" id="ts-ctx-block">
-      <div class="ts-label">🔍 CONTEXT NEURONS (working memory)</div>
+      <div class="ts-label">🔍 Context Neurons</div>
       <div id="ts-context"></div>
     </div>
     <div class="ts-block" id="ts-resp-block">
-      <div class="ts-label">🧠 SPORE RESPONSE</div>
+      <div class="ts-label">🧠 SPORE Response</div>
       <div class="ts-text" id="ts-response"></div>
     </div>
     <div class="ts-block" id="ts-assess-block">
-      <div class="ts-label">⚖ ASSESSMENT</div>
+      <div class="ts-label">⚖ Assessment</div>
       <div id="ts-assessment"></div>
     </div>
   </div>
 
-  <!-- ── Emergent Chat Interface (hidden until SPORE is ready) ── -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- PANEL TABS (edge handles)                             -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <button id="ui-tab" aria-label="Toggle config panel">
+    <span class="tab-chevron">◂</span><span>CFG</span>
+  </button>
+  <button id="ts-tab" aria-label="Toggle training panel">
+    <span>TRAIN</span><span class="tab-chevron">▸</span>
+  </button>
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- CHAT                                                  -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <button id="chat-tab" aria-label="Toggle SPORE chat">
+    <span class="tab-arrow">↑</span>
+    <span>💬 SPORE CHAT</span>
+  </button>
   <div id="chat-panel">
-    <div id="chat-header">
-      <h3>💬 SPORE Chat</h3>
-    </div>
+    <div id="chat-header"><h3>💬 SPORE Chat</h3></div>
     <div id="chat-history"></div>
-    <div id="chat-emergence-note">
-      SPORE responds using only its acquired knowledge bank — no external AI.
-    </div>
+    <div id="chat-emergence-note">SPORE responds using only its acquired knowledge — no external AI.</div>
     <div id="chat-input-row">
       <input id="chat-input" type="text" placeholder="Ask SPORE anything…" autocomplete="off" />
       <button id="chat-send">Send</button>
     </div>
   </div>
 
-  <button id="reset-view">⌖ Reset View</button>
-
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- NEURON DETAIL POPUP                                   -->
+  <!-- ══════════════════════════════════════════════════════ -->
   <div id="neuron-panel">
     <span id="np-close">✕</span>
     <h4 id="np-concept"></h4>
-    <div class="np-row"><span>File</span><span id="np-file" style="color:#8deaff;font-family:monospace;font-size:10px"></span></div>
+    <div class="np-row"><span>File</span><span id="np-file" style="font-size:10px;font-family:monospace"></span></div>
     <div class="np-row"><span>Layer</span><span id="np-layer"></span></div>
     <div class="np-row"><span>Connections</span><span id="np-connections"></span></div>
     <div class="np-row"><span>Knowledge depth</span><span id="np-knowledge"></span></div>
     <div class="np-row"><span>First seen</span><span id="np-time"></span></div>
     <div id="np-snippet"></div>
   </div>
+
+  <button id="reset-view">⌖ Reset View</button>
 
   <!-- ─────────────────────────────────────────────────── -->
   <!-- Firebase — auto-initialises with project config    -->
@@ -928,6 +1057,16 @@
       const logEl = document.getElementById("log");
       logEl.prepend(row);
       while (logEl.children.length > 15) logEl.removeChild(logEl.lastChild);
+      // Mirror to simple viz activity feed
+      const feed = document.getElementById("sv-feed");
+      if (feed) {
+        const hh = new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+        const fi = document.createElement("div");
+        fi.className = "sv-feed-item" + (type ? ` ${type}` : "");
+        fi.textContent = `${hh} ${message.slice(0, 72)}`;
+        feed.prepend(fi);
+        while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+      }
     }
 
     function grow(concept, parent, data = {}) {
@@ -1338,14 +1477,18 @@
       const panel = document.getElementById("ui");
       const tab   = document.getElementById("ui-tab");
       panel.classList.toggle("panel-collapsed");
-      tab.classList.toggle("flipped", panel.classList.contains("panel-collapsed"));
+      const hidden = panel.classList.contains("panel-collapsed");
+      tab.classList.toggle("flipped", hidden);
+      document.body.classList.toggle("ui-hidden", hidden);
     };
 
     document.getElementById("ts-tab").onclick = () => {
       const panel = document.getElementById("training-sandbox");
       const tab   = document.getElementById("ts-tab");
       panel.classList.toggle("panel-collapsed");
-      tab.classList.toggle("flipped", panel.classList.contains("panel-collapsed"));
+      const hidden = panel.classList.contains("panel-collapsed");
+      tab.classList.toggle("flipped", hidden);
+      document.body.classList.toggle("ts-hidden", hidden);
     };
 
     document.getElementById("chat-tab").onclick = () => {
@@ -1916,6 +2059,7 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
         document.getElementById("ts-readiness").textContent = readiness;
         persistTrainingState();
+        if (vizMode === "simple") { updateSvScoreChart(); updateSvLevel(); }
 
         const badge2 = result.good
           ? `<span class="ts-badge good">✅ Good — ${result.score.toFixed(2)}</span>`
@@ -2344,6 +2488,7 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
           document.getElementById("ts-readiness").textContent = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
         }
         updateLevelDisplay();
+        updateSvScoreChart(); updateSvLevel();
         log(`📂 Restored training state — cycle ${tsCycles}, level ${currentLevel}`, "ok");
       } catch (_) {}
     }
@@ -2362,11 +2507,45 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
       document.getElementById("ts-avg-score").textContent = "—";
       document.getElementById("ts-readiness").textContent = "—";
       updateLevelDisplay();
+      // clear simple viz score chart and level progress
+      const svChart = document.getElementById("sv-score-chart");
+      if (svChart) svChart.innerHTML = "";
+      document.getElementById("sv-avg-score").textContent = "—";
+      document.getElementById("sv-readiness").textContent  = "—";
+      updateSvLevel();
       log("↺ Training state reset — cycle counter cleared", "warn");
       tsStatus("↺ Reset — ready to start fresh");
     };
 
     // ── Simple Visualizer — 2D growing neuron dot grid ───
+    function updateSvScoreChart() {
+      const el = document.getElementById("sv-score-chart");
+      if (!el || !tsScores.length) return;
+      const scores = tsScores.slice(-20);
+      el.innerHTML = scores.map(s => {
+        const h = Math.max(2, Math.round(s * 96));
+        const c = s >= 0.75 ? "#00ff88" : s >= 0.5 ? "#ff8c00" : "#ff4d4d";
+        return `<div class="sv-bar" style="height:${h}px;background:${c}"></div>`;
+      }).join("");
+    }
+
+    function updateSvLevel() {
+      const pct  = Math.min(100, Math.round((levelPasses / 4) * 100));
+      const fill = document.getElementById("sv-lvl-fill");
+      const name = document.getElementById("sv-lvl-name");
+      const read = document.getElementById("sv-readiness-text");
+      const svR  = document.getElementById("sv-readiness");
+      if (fill) fill.style.width = pct + "%";
+      if (name) name.textContent = `Level ${currentLevel} — ${levelName(currentLevel)}`;
+      if (tsScores.length) {
+        const avg = tsScores.reduce((a, b) => a + b, 0) / tsScores.length;
+        const r   = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
+        if (read) read.textContent = r;
+        if (svR)  svR.textContent  = r;
+        document.getElementById("sv-avg-score").textContent = avg.toFixed(2);
+      }
+    }
+
     function refreshSimpleView() {
       if (vizMode !== "simple") return;
       const now = Date.now();
@@ -2383,15 +2562,17 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         // Opacity: 0.15 (fresh/empty) → 0.9 (knowledge-rich)
         const opacity  = (0.15 + (kc / 12) * 0.75).toFixed(2);
         const cls      = `sv-dot${isDst ? " sv-dst" : ""}${isActive ? " sv-active" : ""}`;
-        const label    = n.concept.replace(/^\[DST\] |\[CTX\] /g, "").slice(0, 28);
+        const label    = n.concept.replace(/^\[DST\] |\[CTX\] /g, "").slice(0, 36);
         return `<div class="${cls}" style="opacity:${opacity}" title="${label}"></div>`;
       }).join("");
 
-      document.getElementById("sv-neuron-ct").textContent  = `${visible.length} neurons`;
-      document.getElementById("sv-synapse-ct").textContent = `${synapses.filter(s=>!s.dead).length} synapses`;
+      document.getElementById("sv-neuron-ct").textContent  = visible.length;
+      document.getElementById("sv-synapse-ct").textContent = synapses.filter(s=>!s.dead).length;
       document.getElementById("sv-phase-txt").textContent  = document.getElementById("phase").textContent;
       document.getElementById("sv-live-dot").style.display = isTraining ? "" : "none";
       document.getElementById("sv-overflow").textContent   = "";
+      updateSvScoreChart();
+      updateSvLevel();
     }
 
     function applyVizMode() {
