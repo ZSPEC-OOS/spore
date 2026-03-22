@@ -1618,7 +1618,7 @@
           "not","its","it","in","on","at","by","to","of","i","you","we","they","he","she"]);
         const qWords = question.toLowerCase()
           .replace(/[^a-z ]/g, " ").split(/\s+/)
-          .filter(w => w.length > 3 && !STOP.has(w));
+          .filter(w => w.length >= 2 && !STOP.has(w));
         if (!qWords.length) return null;
 
         const scored = neurons
@@ -1680,11 +1680,11 @@
 
       // ── Fallback: raw snippet concatenation ──────────────
       const STOP = new Set(["the","a","an","is","are","was","were","be","been","have","has","had","do","does","did","will","would","could","should","can","what","how","why","when","where","who","that","this","with","from","for","and","or","but","not","its","it","in","on","at","by","to","of"]);
-      const qWords = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 3 && !STOP.has(w));
-      if (!qWords.length) return "Insufficient query tokens to retrieve knowledge.";
+      const qWords = question.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length >= 2 && !STOP.has(w));
+      if (!qWords.length) return "My knowledge bank is still forming. Try asking after more training cycles.";
 
       const scoreNode = n => {
-        const text = (n.concept + " " + (n.snippet || "")).toLowerCase();
+        const text = [n.concept, n.snippet, ...(n.snippets || []).map(s => s.text)].filter(Boolean).join(" ").toLowerCase();
         return qWords.reduce((s, w) => s + (text.includes(w) ? 1 : 0), 0);
       };
 
@@ -2423,7 +2423,11 @@ Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": 
         if (index.currentLevel) { currentLevel = index.currentLevel; levelIter = index.levelIter || 0; levelPasses = index.levelPasses || 0; }
         updateLevelDisplay();
         syncUI();
-        log(`Brain loaded — ${neurons.length} nodes (level ${currentLevel})`, "ok");
+        // Train ML model on the loaded knowledge bank
+        const tok = sporeML.train();
+        const mlEl = document.getElementById("ts-ml-corpus");
+        if (mlEl) mlEl.textContent = tok > 0 ? tok + " tok / " + sporeML.vocabSize + " vocab" : "—";
+        log(`Brain loaded — ${neurons.length} nodes (level ${currentLevel}, ML corpus: ${tok} tokens)`, "ok");
       } catch (err) {
         if (err.name === "NotFoundError") log("No saved brain found — starting fresh", "warn");
         else log(`Load error: ${err.message}`, "err");
