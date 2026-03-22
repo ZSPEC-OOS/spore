@@ -543,7 +543,7 @@
       <div id="ts-context"></div>
     </div>
     <div class="ts-block" id="ts-resp-block">
-      <div class="ts-label">🧠 SPORE Response</div>
+      <div class="ts-label">✦ Answer (AI-provided)</div>
       <div class="ts-text" id="ts-response"></div>
     </div>
     <div class="ts-block" id="ts-assess-block">
@@ -1410,9 +1410,11 @@
     }
 
     // Firebase module signals readiness via a custom event.
+    // Auto-load the brain immediately once Firebase is confirmed ready.
     window.addEventListener("firebase-ready", () => {
       setFirebaseStatus(true, "Connected — spore-2d34f");
-      log("Firebase ready", "ok");
+      log("Firebase ready — loading brain…", "ok");
+      loadBrainFromFirebase();
     });
 
     // If the module fails (network error, etc.) the event never fires;
@@ -2059,19 +2061,9 @@ Return ONLY valid JSON — no other text:
         });
         syncUI();
 
-        // ── 4. SPORE recall check (informational only) ──────
-        // The AI-provided idealAnswer IS the authoritative SPORE response.
-        // We also show SPORE's own retrieval as a "recall check" so we can
-        // track learning progress, but it does NOT gate the commit.
-        tsStatus("🧠 Checking SPORE recall…");
-        const sporeRecall = sporeRespond(question, ctxPool);
-        const displayReply = idealAnswer; // always use AI answer for training
-        document.getElementById("ts-response").innerHTML =
-          `<div style="margin-bottom:8px">${displayReply}</div>` +
-          (sporeRecall && sporeRecall !== displayReply
-            ? `<div style="font-size:10px;color:var(--muted);border-top:1px solid rgba(0,242,255,.1);padding-top:6px;margin-top:2px">` +
-              `<span style="color:var(--cyan);letter-spacing:.04em;font-size:9px">SPORE RECALL ›</span> ${sporeRecall}</div>`
-            : "");
+        // ── 4. SPORE response — use AI's ideal answer directly ─
+        // SPORE has no language generation; the ideal answer IS the response.
+        document.getElementById("ts-response").textContent = idealAnswer;
         tsShowBlock("ts-resp-block");
 
         // ── 5. AI scores quality of the Q+A pair itself ─────
@@ -2472,10 +2464,6 @@ Reply ONLY with JSON: {"good": true, "score": 0.85, "feedback": "one brief sente
     document.getElementById("fb-save-brain").onclick = saveBrainToFirebase;
     document.getElementById("fb-load-brain").onclick  = loadBrainFromFirebase;
 
-    // ── Auto-load brain from Firebase on startup ──────────
-    async function tryAutoLoad() {
-      if (window._fb?.loadBrain) await loadBrainFromFirebase();
-    }
 
     // ── Canvas control buttons ────────────────────────────
     document.getElementById("btn-anim-pause").onclick = function () {
@@ -2657,7 +2645,6 @@ Reply ONLY with JSON: {"good": true, "score": 0.85, "feedback": "one brief sente
     // Chat is always present
     document.getElementById("chat-panel").classList.add("emerged");
     document.getElementById("chat-tab").classList.add("tab-visible");
-    tryAutoLoad();
   </script>
 </body>
 </html>
