@@ -209,9 +209,21 @@
       transition: border-color .15s;
     }
     #modal textarea:focus { border-color: var(--amber); }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
-    #modal-error { font-size: 10px; color: var(--red); min-height: 14px; }
-    #modal-status { font-size: 10px; color: var(--green); min-height: 14px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+    #modal-error {
+      font-size: 11px; color: #ff8888; min-height: 0; padding: 8px 10px;
+      background: rgba(255,77,77,0.12); border: 1px solid rgba(255,77,77,0.35);
+      border-radius: 3px; display: none; line-height: 1.5;
+    }
+    #modal-error.visible { display: block; }
+    #modal-status {
+      font-size: 11px; color: #88ffbb; min-height: 0; padding: 8px 10px;
+      background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3);
+      border-radius: 3px; display: none; line-height: 1.5;
+    }
+    #modal-status.visible { display: block; }
+    #import-submit { min-width: 80px; }
+    #import-submit:disabled { opacity: .5; cursor: default; }
   </style>
 </head>
 <body>
@@ -294,8 +306,8 @@
     <div id="modal-error"></div>
     <div id="modal-status"></div>
     <div class="modal-actions">
-      <button class="tb-btn" onclick="closeImport()">Cancel</button>
-      <button class="tb-btn amber" onclick="submitImport()">Import</button>
+      <button class="tb-btn" id="import-cancel" onclick="closeImport()">Cancel</button>
+      <button class="tb-btn amber" id="import-submit" onclick="submitImport()">Import</button>
     </div>
   </div>
 </div>
@@ -557,10 +569,30 @@
   }
 
   // ── Import modal ─────────────────────────────────────────────
+  function _modalMsg(type, text) {
+    const errEl  = document.getElementById('modal-error');
+    const statEl = document.getElementById('modal-status');
+    errEl.className  = '';
+    statEl.className = '';
+    if (type === 'error') {
+      errEl.textContent = text;
+      errEl.classList.add('visible');
+    } else if (type === 'success') {
+      statEl.textContent = text;
+      statEl.classList.add('visible');
+    } else {
+      errEl.textContent  = '';
+      statEl.textContent = '';
+    }
+  }
+
   function openImport() {
-    document.getElementById('import-json').value  = '';
-    document.getElementById('modal-error').textContent  = '';
-    document.getElementById('modal-status').textContent = '';
+    document.getElementById('import-json').value = '';
+    _modalMsg('clear', '');
+    const btn = document.getElementById('import-submit');
+    btn.textContent = 'Import';
+    btn.disabled = false;
+    document.getElementById('import-cancel').disabled = false;
     document.getElementById('modal-overlay').classList.add('visible');
     setTimeout(() => document.getElementById('import-json').focus(), 50);
   }
@@ -570,20 +602,28 @@
   }
 
   async function submitImport() {
-    const raw    = document.getElementById('import-json').value.trim();
-    const errEl  = document.getElementById('modal-error');
-    const statEl = document.getElementById('modal-status');
-    errEl.textContent  = '';
-    statEl.textContent = 'Importing…';
+    const raw = document.getElementById('import-json').value.trim();
+    const btn = document.getElementById('import-submit');
+
+    _modalMsg('clear', '');
+
+    if (!raw) {
+      _modalMsg('error', 'Paste a JSON spec before importing.');
+      return;
+    }
 
     let spec;
     try {
       spec = JSON.parse(raw);
     } catch (e) {
-      errEl.textContent  = 'Invalid JSON: ' + e.message;
-      statEl.textContent = '';
+      _modalMsg('error', 'Invalid JSON — ' + e.message);
       return;
     }
+
+    // Loading state
+    btn.textContent = 'Importing…';
+    btn.disabled    = true;
+    document.getElementById('import-cancel').disabled = true;
 
     try {
       const r = await fetch('/api/nlf/stages/import', {
@@ -593,23 +633,31 @@
       });
       const data = await r.json();
       if (!r.ok) {
-        errEl.textContent  = data.detail || 'Import failed';
-        statEl.textContent = '';
+        _modalMsg('error', data.detail || `Server error ${r.status}`);
+        btn.textContent = 'Import';
+        btn.disabled    = false;
+        document.getElementById('import-cancel').disabled = false;
         return;
       }
-      statEl.textContent = `Imported Stage ${data.stage} — ${data.categories} categories, ${data.questions} questions.`;
-      errEl.textContent  = '';
+
+      _modalMsg('success',
+        `✓ Stage ${data.stage} imported — ${data.categories} categor${data.categories === 1 ? 'y' : 'ies'}, ` +
+        `${data.questions} question${data.questions === 1 ? '' : 's'}.`
+      );
+
       await loadMastery();
-      // Auto-load detail for the newly imported stage
       await loadStageDetail(data.stage);
       renderTree();
-      // Expand the stage in tree
       document.querySelectorAll(`.stage-node[data-stage="${data.stage}"]`).forEach(el => el.classList.add('open'));
       document.querySelectorAll(`.cat-list[data-stage="${data.stage}"]`).forEach(el => el.classList.add('visible'));
-      setTimeout(closeImport, 800);
+
+      // Give user time to read the success message, then close
+      setTimeout(closeImport, 2200);
     } catch (err) {
-      errEl.textContent  = 'Network error: ' + err.message;
-      statEl.textContent = '';
+      _modalMsg('error', 'Network error — is the server running? (' + err.message + ')');
+      btn.textContent = 'Import';
+      btn.disabled    = false;
+      document.getElementById('import-cancel').disabled = false;
     }
   }
 
