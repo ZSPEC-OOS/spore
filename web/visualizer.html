@@ -84,6 +84,22 @@
     .ts-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; }
     .ts-badge.good { background:rgba(0,255,136,0.12); color:#00ff88; border:1px solid #00ff88; }
     .ts-badge.poor { background:rgba(255,77,77,0.12); color:#ff4d4d; border:1px solid #ff4d4d; }
+    /* ── Training mode toggle ──────────────────────────── */
+    .ts-mode-btn {
+      flex:1; padding:5px 0; font-size:11px;
+      border:1px solid rgba(255,140,0,0.45); color:#ff8c00;
+      background:transparent; border-radius:4px; cursor:pointer;
+      font-family:"Courier New",monospace; transition:background .15s,color .15s;
+      letter-spacing:.03em; width:auto;
+    }
+    .ts-mode-btn.active { background:rgba(255,140,0,0.85); color:#0a0a1a; border-color:#ff8c00; }
+    .ts-mode-btn:hover:not(.active) { background:rgba(255,140,0,0.12); }
+    /* ── Reorganization flash ──────────────────────────── */
+    @keyframes reorg-pulse {
+      0%,100% { box-shadow: 0 0 24px rgba(255,140,0,0.18); }
+      50%      { box-shadow: 0 0 52px rgba(255,210,0,0.75), inset 0 0 12px rgba(255,200,0,0.1); }
+    }
+    #training-sandbox.reorg-active { animation: reorg-pulse 0.7s ease 4; }
     /* ── Emergent Chat Interface ───────────────────────── */
     #chat-panel {
       position: fixed; bottom: 0; left: 50%; transform: translateX(-50%) translateY(100%);
@@ -321,6 +337,12 @@
       <h3>🎓 Training Sandbox</h3>
       <span id="ts-live-badge" style="font-size:10px;color:#8deaff;opacity:0.6">● idle</span>
     </div>
+    <!-- ── Mode toggle ─────────────────────────────────── -->
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button class="ts-mode-btn active" id="ts-mode-standard">⚙ Standard</button>
+      <button class="ts-mode-btn"        id="ts-mode-distill" >⚗ Distillation</button>
+    </div>
+    <div id="ts-mode-hint" style="font-size:10px;color:#8deaff;margin-bottom:6px;min-height:13px">Web search → SPORE</div>
     <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
     <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
     <div class="ts-metric"><span>Avg Score</span><span id="ts-avg-score">—</span></div>
@@ -330,6 +352,10 @@
     <div class="ts-block" id="ts-q-block">
       <div class="ts-label">❓ QUESTION</div>
       <div class="ts-text" id="ts-question"></div>
+    </div>
+    <div class="ts-block" id="ts-distill-block">
+      <div class="ts-label">⚗ DISTILLED FRAGMENTS (closed-loop)</div>
+      <div id="ts-distill-list"></div>
     </div>
     <div class="ts-block" id="ts-ctx-block">
       <div class="ts-label">🔍 CONTEXT NEURONS (working memory)</div>
@@ -937,7 +963,7 @@
         isTraining = true;
         document.getElementById("ts-live-badge").textContent = "● active";
         document.getElementById("ts-live-badge").style.opacity = "1";
-        runTrainingCycle();
+        runNextCycle();
       }
 
       // Supplemental: static general queries feed the knowledge graph in parallel.
@@ -977,7 +1003,7 @@
         // Resuming — restart training loop
         badge.textContent = "● active";
         badge.style.opacity = "1";
-        runTrainingCycle();
+        runNextCycle();
       } else {
         // Pausing — stop loop after current cycle and clear working memory
         clearCtxPool();
@@ -1354,6 +1380,7 @@
     // ══════════════════════════════════════════════════════
 
     let isTraining      = false;
+    let distillationMode = false;   // false = standard (web search), true = closed-loop AI distillation
     let tsCycles        = 0;
     let tsCommits       = 0;
     const tsScores      = [];      // rolling window (last 20)
@@ -1639,6 +1666,7 @@ Reply ONLY with this JSON (no other text):
           tsStatus(`❌ Cycle ${tsCycles} — knowledge discarded`);
           log(`Training cycle ${tsCycles}: rejected — ${result.feedback}`, "err");
         }
+        await checkNeuralReorganization();
         syncUI();
 
       } catch (err) {
@@ -1647,17 +1675,273 @@ Reply ONLY with this JSON (no other text):
         clearCtxPool();
       }
 
-      // Schedule next cycle — rate limiters (DDG 4.3s, AI 3.4s) handle pacing;
-      // this small gap is just breathing room between cycles.
+      // Schedule next cycle — rate limiters (DDG 4.3s, AI 3.4s) handle pacing.
       if (isTraining) {
         await new Promise(r => setTimeout(r, 1000));
-        if (isTraining) runTrainingCycle();
+        if (isTraining) runNextCycle();
       } else {
         const badge = document.getElementById("ts-live-badge");
         badge.textContent = "● idle"; badge.style.opacity = "0.6";
       }
     }
 
+
+    // ── Cycle dispatcher — routes to correct mode ─────────
+    function runNextCycle() {
+      if (distillationMode) runDistillationCycle();
+      else runTrainingCycle();
+    }
+
+    // ══════════════════════════════════════════════════════
+    // DISTILLATION MODE
+    // AI → fragments → SPORE (no web search)
+    // ══════════════════════════════════════════════════════
+    async function runDistillationCycle() {
+      const cfg = getAiConfigFromForm();
+      if (!cfg.api_key || !cfg.model_id) {
+        tsStatus("⚠ Configure AI model first");
+        isTraining = false; isLearning = false;
+        const badge = document.getElementById("ts-live-badge");
+        badge.textContent = "● idle"; badge.style.opacity = "0.6";
+        return;
+      }
+
+      clearCtxPool();
+      ["ts-q-block","ts-distill-block","ts-ctx-block","ts-resp-block","ts-assess-block"]
+        .forEach(id => { document.getElementById(id).style.display = "none"; });
+
+      try {
+        // ── 1. AI generates a question ──────────────────────
+        tsStatus(`⚗ [Distill] Level ${currentLevel} question…`);
+        levelIter++;
+        let question = await aiCall([
+          { role: "system", content: `You are a curriculum designer for SPORE. Generate ${LEVEL_PROMPTS[currentLevel]} Return ONLY the question text — no explanation, no numbering, no prefix.` },
+          { role: "user",   content: "Generate the next training question." },
+        ], 60);
+        if (!question) throw new Error("AI returned empty question — check model config");
+        document.getElementById("ts-question").textContent = question;
+        tsShowBlock("ts-q-block");
+
+        // ── 2. AI distils multiple knowledge fragments ──────
+        // No web search — pure closed-loop AI knowledge injection.
+        tsStatus("⚗ Distilling knowledge fragments…");
+        const rawDistill = await aiCall([
+          {
+            role: "system",
+            content: `You are distilling knowledge for SPORE, a neural learning system. Given a question, generate exactly 4 distinct, accurate, and complementary knowledge fragments that together answer the question comprehensively. These fragments are injected directly into SPORE's neural network — no web search occurs. Each fragment must be 1–3 factual sentences focusing on a different angle. Return ONLY a valid JSON array of exactly 4 strings, no other text: ["fragment1", "fragment2", "fragment3", "fragment4"]`,
+          },
+          { role: "user", content: question },
+        ], 500);
+
+        let fragments = [];
+        try {
+          const m = rawDistill.match(/\[[\s\S]*?\]/);
+          if (m) fragments = JSON.parse(m[0]).filter(f => typeof f === "string" && f.trim().length > 10);
+        } catch (_) {}
+        // Fallback: split on numbered lines or newlines
+        if (!fragments.length) {
+          fragments = rawDistill.split(/\n+/).map(l => l.replace(/^\d+[\.\)]\s*/, "").trim()).filter(l => l.length > 20).slice(0, 4);
+        }
+        if (!fragments.length) throw new Error("Distillation produced no usable fragments");
+
+        // Display fragments in the UI
+        document.getElementById("ts-distill-list").innerHTML = fragments.map((f, i) => `
+          <div style="border-top:1px solid rgba(255,140,0,0.18);padding:5px 0;font-size:11px;color:#e0f7ff">
+            <span style="color:#ff8c00;font-size:10px;letter-spacing:.04em">FRAGMENT ${i + 1}</span><br>${f}
+          </div>`).join("");
+        tsShowBlock("ts-distill-block");
+
+        // ── 3. Inject fragments as context neurons ──────────
+        const ctxHtml = fragments.map((f, i) =>
+          `<div class="ts-source">⚗ ${i + 1}: ${f.slice(0, 58)}…</div>`).join("");
+        document.getElementById("ts-context").innerHTML = ctxHtml;
+        tsShowBlock("ts-ctx-block");
+
+        fragments.forEach((frag, i) => {
+          const words   = frag.replace(/[^a-zA-Z0-9 ]/g, "").split(/\s+/).filter(Boolean);
+          const concept = "[DST] " + (words.slice(0, 2).join(" ") || `frag-${i + 1}`);
+          const parent  = neurons[Math.floor(Math.random() * Math.min(neurons.length, 6))];
+          const n       = grow(concept, parent, { url: null, snippet: frag, source: "distillation" });
+          n.type = "context";
+          ctxPool.push(n);
+          n.activate();
+        });
+        syncUI();
+
+        // ── 4. SPORE synthesizes from distilled fragments ───
+        tsStatus("🧠 SPORE synthesizing distilled knowledge…");
+        const sporeReply = sporeRespond(question, ctxPool);
+        document.getElementById("ts-response").textContent = sporeReply;
+        tsShowBlock("ts-resp-block");
+
+        // ── 5. AI assesses SPORE's integration ─────────────
+        tsStatus("⚖ Assessing knowledge integration…");
+        const ctxSummary    = fragments.join(" | ");
+        const assessContent = `Question: ${question}\nDistilled fragments given to SPORE: ${ctxSummary}\nSPORE's synthesized response: ${sporeReply || "(no response)"}`;
+        const rawResult = await aiCall([
+          {
+            role: "system",
+            content: `You are evaluating SPORE in distillation mode. SPORE received direct knowledge fragments (no web search). Assess whether its response coherently integrates the distilled knowledge.
+
+STRICT RULES:
+1. Do NOT answer the question yourself.
+2. Judge only: did SPORE integrate the knowledge into a coherent, on-topic response?
+
+A response is GOOD if it draws on the fragment content, even imperfectly.
+A response is POOR only if completely off-topic or says it has no knowledge.
+
+Reply ONLY with JSON (no other text): {"good": true, "score": 0.75, "feedback": "one brief sentence"}`,
+          },
+          { role: "user", content: assessContent },
+        ], 80);
+
+        let result = { good: false, score: 0, feedback: "Could not parse assessment" };
+        try { const m = rawResult.match(/\{[\s\S]*?\}/); if (m) result = JSON.parse(m[0]); } catch (_) {}
+
+        tsCycles++;
+        tsScores.push(result.score);
+        if (tsScores.length > 20) tsScores.shift();
+        const avg      = tsScores.reduce((a, b) => a + b, 0) / tsScores.length;
+        const readiness = avg >= 0.75 ? "✅ Ready" : avg >= 0.5 ? "🔄 Developing" : "🌱 Early";
+
+        document.getElementById("ts-cycles").textContent    = tsCycles;
+        document.getElementById("ts-avg-score").textContent = avg.toFixed(2);
+        document.getElementById("ts-readiness").textContent = readiness;
+
+        if (!chatEmerged && avg >= 0.75 && tsCycles >= 5) emergeChat(avg, tsCycles);
+
+        const badge2 = result.good
+          ? `<span class="ts-badge good">✅ Good — ${result.score.toFixed(2)}</span>`
+          : `<span class="ts-badge poor">❌ Poor — ${result.score.toFixed(2)}</span>`;
+        document.getElementById("ts-assessment").innerHTML =
+          `${badge2}<div style="margin-top:6px;color:#8deaff;font-size:11px">${result.feedback}</div>`;
+        tsShowBlock("ts-assess-block");
+
+        levelHistory.push({ q: question, a: sporeReply, score: result.score });
+        if (levelHistory.length > 8) levelHistory.shift();
+
+        if (result.good) {
+          levelPasses++;
+          commitCtxPool();
+          tsCommits++;
+          document.getElementById("ts-commits").textContent = tsCommits;
+          tsStatus(`⚗ Distillation cycle ${tsCycles} — knowledge absorbed`);
+          log(`Distillation ${tsCycles}: committed (score ${result.score.toFixed(2)}, level ${currentLevel})`, "ok");
+          await checkLevelAdvancement();
+        } else {
+          clearCtxPool();
+          tsStatus(`❌ Distillation cycle ${tsCycles} — fragments rejected`);
+          log(`Distillation ${tsCycles}: rejected — ${result.feedback}`, "err");
+        }
+
+        await checkNeuralReorganization();
+        syncUI();
+
+      } catch (err) {
+        tsStatus(`❌ Error: ${err.message}`);
+        log(`Distillation error: ${err.message}`, "err");
+        clearCtxPool();
+      }
+
+      if (isTraining) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (isTraining) runNextCycle();
+      } else {
+        const badge = document.getElementById("ts-live-badge");
+        badge.textContent = "● idle"; badge.style.opacity = "0.6";
+      }
+    }
+
+    // ══════════════════════════════════════════════════════
+    // NEURAL REORGANIZATION
+    // SPORE monitors its own structure and self-repairs when
+    // it detects coherence degradation, fragmentation, or
+    // inconsistent patterns.
+    // ══════════════════════════════════════════════════════
+    let reorgCooldown = 0; // cycles to skip before next reorg check
+
+    async function checkNeuralReorganization() {
+      if (tsCycles < 8)    return; // need baseline data
+      if (reorgCooldown > 0) { reorgCooldown--; return; }
+
+      const permanent    = neurons.filter(n => n.type === "permanent" && !n.dead);
+      if (permanent.length < 4) return;
+
+      // ── Compute health metrics ────────────────────────────
+      const avg     = tsScores.length ? tsScores.reduce((a, b) => a + b, 0) / tsScores.length : 1;
+      const last5   = tsScores.slice(-5);
+      const variance = last5.length > 2
+        ? last5.reduce((s, v) => s + (v - avg) ** 2, 0) / last5.length
+        : 0;
+
+      const permSet = new Set(permanent);
+      const isolated = permanent.filter(n =>
+        !synapses.some(s => !s.dead && (s.a === n || s.b === n) && permSet.has(s.a === n ? s.b : s.a))
+      );
+      const fragmentationRatio = isolated.length / permanent.length;
+
+      const liveSyn  = synapses.filter(s => !s.dead);
+      const avgStrength = liveSyn.length
+        ? liveSyn.reduce((s, syn) => s + syn.strength, 0) / liveSyn.length
+        : 1;
+
+      // ── Identify triggers ─────────────────────────────────
+      const triggers = [];
+      if (avg < 0.45)                triggers.push("coherence degradation");
+      if (fragmentationRatio > 0.35) triggers.push("knowledge fragmentation");
+      if (variance > 0.09)           triggers.push("inconsistent patterns");
+      if (avgStrength < 0.11 && liveSyn.length > 6) triggers.push("weak pathways");
+
+      if (!triggers.length) return;
+
+      // ── Trigger reorganization ────────────────────────────
+      log(`🔄 Neural reorg triggered: ${triggers.join(", ")}`, "warn");
+      tsStatus("🔄 Reorganizing neural pathways…");
+
+      const ts = document.getElementById("training-sandbox");
+      ts.classList.add("reorg-active");
+      setTimeout(() => ts.classList.remove("reorg-active"), 3000);
+
+      // Pulse all permanent nodes to signal activity
+      permanent.forEach(n => { n.targetRadius = Math.min(22, n.radius + 6); });
+
+      // 1. Connect isolated nodes to nearest 2 neighbours
+      let newSynapses = 0;
+      isolated.forEach(n => {
+        const nearest = [...permanent]
+          .filter(o => o !== n)
+          .sort((a, b) => Math.hypot(a.x - n.x, a.y - n.y) - Math.hypot(b.x - n.x, b.y - n.y))
+          .slice(0, 2);
+        nearest.forEach(other => {
+          const exists = synapses.some(s => (s.a === n && s.b === other) || (s.a === other && s.b === n));
+          if (!exists) { const syn = new Synapse(n, other); syn.strength = 0.06; synapses.push(syn); newSynapses++; }
+        });
+      });
+
+      // 2. Prune dead-weight synapses (very weak, both endpoints knowledge-poor)
+      let pruned = 0;
+      for (let i = synapses.length - 1; i >= 0; i--) {
+        const s = synapses[i];
+        if (!s.dead && s.strength < 0.055 && (s.a.knowledgeCount || 0) < 2 && (s.b.knowledgeCount || 0) < 2) {
+          synapses.splice(i, 1); pruned++;
+        }
+      }
+
+      // 3. Strengthen synapses attached to knowledge-rich nodes
+      let boosted = 0;
+      permanent.filter(n => (n.knowledgeCount || 0) >= 5).forEach(n => {
+        synapses.filter(s => !s.dead && (s.a === n || s.b === n)).forEach(s => {
+          if (s.strength < 0.95) { s.strength = Math.min(1, s.strength + 0.04); boosted++; }
+        });
+      });
+
+      reorgCooldown = 6; // don't re-trigger for 6 cycles
+      const summary = `${isolated.length} reconnected · ${pruned} pruned · ${boosted} boosted`;
+      log(`🔄 Reorg complete — ${summary}`, "ok");
+      tsStatus(`🔄 Reorg done — ${summary}`);
+      await saveIndex();
+      syncUI();
+    }
 
     // ── IndexedDB — persist FileSystemDirectoryHandle ────
     const IDB_DB = "spore-v1", IDB_STORE = "handles";
@@ -1872,6 +2156,23 @@ Reply ONLY with this JSON (no other text):
         brainDirHandle = null;
       }
     }
+
+    // ── Training mode toggle ──────────────────────────────
+    document.getElementById("ts-mode-standard").onclick = () => {
+      distillationMode = false;
+      document.getElementById("ts-mode-standard").classList.add("active");
+      document.getElementById("ts-mode-distill").classList.remove("active");
+      document.getElementById("ts-mode-hint").textContent = "Web search → SPORE";
+      log("Mode: Standard (web search)");
+    };
+
+    document.getElementById("ts-mode-distill").onclick = () => {
+      distillationMode = true;
+      document.getElementById("ts-mode-distill").classList.add("active");
+      document.getElementById("ts-mode-standard").classList.remove("active");
+      document.getElementById("ts-mode-hint").textContent = "AI generates fragments → SPORE (no search)";
+      log("Mode: Distillation (closed-loop)");
+    };
 
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
