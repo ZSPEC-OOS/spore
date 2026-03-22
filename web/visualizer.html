@@ -75,8 +75,12 @@
     <section class="section" id="ai-config">
       <h4>AI Model Config (Search/Crawl)</h4>
       <div class="row"><input id="ai-name" placeholder="Name" /></div>
-      <div class="row"><input id="ai-model" placeholder="Model ID (e.g. gpt-4o-mini)" /></div>
-      <div class="row"><input id="ai-base-url" placeholder="Base URL (leave blank for OpenAI)" /></div>
+      <div class="row"><input id="ai-model" placeholder="Model ID (e.g. kimi-k2)" /></div>
+      <div class="row" style="align-items:center">
+        <input id="ai-base-url" placeholder="Base URL" />
+        <button id="find-url" title="Cycle Kimi K2.5 endpoints" style="width:auto;flex-shrink:0;padding:8px 8px;white-space:nowrap">Find ⟳</button>
+      </div>
+      <div id="kimi-label" style="font-size:10px;color:#8deaff;margin-top:2px;min-height:13px"></div>
       <div class="row"><input id="ai-api-key" placeholder="API Key" type="password" /></div>
       <div class="row"><button id="save-ai-config">Save Config</button></div>
       <p class="hint">Saved locally &amp; to Firebase (when connected). Backend CLI: <code>ai config</code></p>
@@ -85,12 +89,13 @@
     <!-- ── Diagnostics ────────────────────────────────── -->
     <section class="section" id="diagnostics">
       <h4>Diagnostics</h4>
+      <div class="row"><input id="server-url" placeholder="Backend URL (e.g. http://localhost:8000)" /></div>
       <div class="row">
         <button id="test-ai" class="btn-warn">🧪 Test AI Model</button>
         <button id="test-search" class="btn-warn">🔍 Test Search</button>
       </div>
       <div id="diag-status"></div>
-      <p class="hint">Requires <code>server.py</code> running on <code>localhost:8000</code></p>
+      <p class="hint">Backend URL is saved to localStorage. Run <code>python server.py</code> to start.</p>
     </section>
 
     <!-- ── Firebase API Key Storage ───────────────────── -->
@@ -177,8 +182,20 @@
     let isLearning = false;
     let learningProgress = 0;
 
-    // ── Backend server base URL ──────────────────────────
-    const API = "http://localhost:8000";
+    // ── Backend server base URL (user-configurable, stored in localStorage) ─
+    const DEFAULT_API = "http://localhost:8000";
+    function getAPI() {
+      return localStorage.getItem("sporeServerUrl") || DEFAULT_API;
+    }
+
+    // ── Kimi K2.5 known endpoints ────────────────────────
+    const KIMI_PRESETS = [
+      { label: "Moonshot AI (CN)",    baseUrl: "https://api.moonshot.cn/v1",   modelId: "kimi-k2-0711-preview" },
+      { label: "Moonshot AI (Global)",baseUrl: "https://api.moonshot.ai/v1",   modelId: "kimi-k2-0711-preview" },
+      { label: "OpenRouter",          baseUrl: "https://openrouter.ai/api/v1", modelId: "moonshotai/kimi-k2"   },
+      { label: "Together AI",         baseUrl: "https://api.together.xyz/v1",  modelId: "moonshotai/Kimi-K2"   },
+    ];
+    let kimiIndex = 0;
 
     // ── Neuron ───────────────────────────────────────────
     class Neuron {
@@ -406,13 +423,36 @@
       try { applyAiConfigToForm(JSON.parse(raw)); } catch (_) {}
     }
 
+    function loadServerUrlFromStorage() {
+      const url = localStorage.getItem("sporeServerUrl");
+      document.getElementById("server-url").value = url || DEFAULT_API;
+    }
+
+    // Save server URL to localStorage whenever it changes.
+    document.getElementById("server-url").addEventListener("change", () => {
+      const val = document.getElementById("server-url").value.trim();
+      localStorage.setItem("sporeServerUrl", val || DEFAULT_API);
+      log(`Backend URL set to ${val || DEFAULT_API}`);
+    });
+
+    // ── Find button — cycle Kimi K2.5 endpoints ──────────
+    document.getElementById("find-url").onclick = () => {
+      const preset = KIMI_PRESETS[kimiIndex % KIMI_PRESETS.length];
+      kimiIndex++;
+      document.getElementById("ai-base-url").value = preset.baseUrl;
+      document.getElementById("ai-model").value    = preset.modelId;
+      document.getElementById("kimi-label").textContent =
+        `[${kimiIndex}/${KIMI_PRESETS.length}] ${preset.label}`;
+      log(`Preset: ${preset.label} — ${preset.modelId}`);
+    };
+
     document.getElementById("save-ai-config").onclick = async () => {
       const cfg = getAiConfigFromForm();
       localStorage.setItem("sporeAiConfig", JSON.stringify(cfg));
 
       // Persist to backend server (non-blocking).
       try {
-        await fetch(`${API}/api/config`, {
+        await fetch(`${getAPI()}/api/config`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cfg),
@@ -433,13 +473,13 @@
     async function runDiagnostic(endpoint, label, statusEl) {
       statusEl.textContent = `Testing ${label}…`;
       try {
-        const res  = await fetch(`${API}${endpoint}`);
+        const res  = await fetch(`${getAPI()}${endpoint}`);
         const data = await res.json();
         const icon = data.ok ? "✅" : "❌";
         statusEl.innerHTML = `${icon} <strong>${label}:</strong> ${data.message}`;
         log(`${icon} ${label}: ${data.message}`, data.ok ? "ok" : "err");
       } catch (err) {
-        statusEl.innerHTML = `❌ <strong>${label}:</strong> ${err.message} — is server.py running?`;
+        statusEl.innerHTML = `❌ <strong>${label}:</strong> ${err.message} — is server.py running at ${getAPI()}?`;
         log(`❌ ${label}: ${err.message}`, "err");
       }
     }
@@ -498,6 +538,7 @@
 
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
+    loadServerUrlFromStorage();
     boot();
   </script>
 </body>
