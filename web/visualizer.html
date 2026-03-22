@@ -366,6 +366,7 @@
   <div id="neuron-panel">
     <span id="np-close">✕</span>
     <h4 id="np-concept"></h4>
+    <div class="np-row"><span>File</span><span id="np-file" style="color:#8deaff;font-family:monospace;font-size:10px"></span></div>
     <div class="np-row"><span>Layer</span><span id="np-layer"></span></div>
     <div class="np-row"><span>Connections</span><span id="np-connections"></span></div>
     <div class="np-row"><span>Knowledge depth</span><span id="np-knowledge"></span></div>
@@ -495,6 +496,12 @@
     ];
     let presetIndex = 0;
 
+    // ── Node ID helper ───────────────────────────────────
+    function makeNodeId(concept) {
+      const slug = concept.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 28);
+      return `${slug}-${Date.now().toString(36)}`;
+    }
+
     // ── Neuron ───────────────────────────────────────────
     class Neuron {
       constructor(concept, x, y, layer, data = {}) {
@@ -513,8 +520,10 @@
         this.createdAt      = new Date().toLocaleTimeString();
         this.type           = "permanent"; // "permanent" | "context"
         this.knowledgeCount = 0;           // increments each time a snippet is committed
-        this.dead           = false;       // true when source file is deleted
+        this.dead           = false;       // true when node file is deleted from disk
         this.deadAlpha      = 1.0;         // fades 1→0 after death
+        // Stable filename-safe ID: slug-timestamp36, assigned once, never changes
+        this.id             = data.id || makeNodeId(concept);
       }
       update() {
         if (this.dead) {
@@ -703,6 +712,7 @@
       const conns  = synapses.filter(s => s.a === n || s.b === n).length;
       const depth  = n.knowledgeCount || 0;
       document.getElementById("np-concept").textContent     = n.concept;
+      document.getElementById("np-file").textContent        = n.id ? `nodes/${n.id}.json` : "—";
       document.getElementById("np-layer").textContent       = n.layer;
       document.getElementById("np-connections").textContent = conns;
       document.getElementById("np-knowledge").textContent   = depth === 0 ? "new node" : `${depth} snippet${depth !== 1 ? "s" : ""}`;
@@ -1490,8 +1500,10 @@
         }
         n.activate();
         synapses.forEach(s => { if (s.a === n || s.b === n) s.transmit(); });
+        saveNodeFile(n); // write just this node's file, not the whole brain
       });
       ctxPool = [];
+      saveIndex(); // update synapse graph
     }
 
     // ── Main training cycle ───────────────────────────────
@@ -1619,7 +1631,7 @@ Reply ONLY with this JSON (no other text):
           document.getElementById("ts-commits").textContent = tsCommits;
           tsStatus(`✅ Cycle ${tsCycles} — committed (Level ${currentLevel})`);
           log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)}, level ${currentLevel})`, "ok");
-          saveBrain();
+          // node files + index already saved inside commitCtxPool()
           // Let the AI decide if SPORE has earned a level-up
           await checkLevelAdvancement();
         } else {
@@ -1711,89 +1723,133 @@ Reply ONLY with this JSON (no other text):
       } catch (err) { log(`Reconnect error: ${err.message}`, "err"); }
     };
 
-    async function saveBrain() {
+    // ── Write a single node file: nodes/{id}.json ─────────
+    async function saveNodeFile(n) {
+      if (!brainDirHandle) return;
+      try {
+        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes", { create: true });
+        const fh       = await nodesDir.getFileHandle(`${n.id}.json`, { create: true });
+        const writable = await fh.createWritable();
+        await writable.write(JSON.stringify({
+          id:             n.id,
+          concept:        n.concept,
+          x:              Math.round(n.x),
+          y:              Math.round(n.y),
+          layer:          n.layer,
+          source:         n.source,
+          createdAt:      n.createdAt,
+          knowledgeCount: n.knowledgeCount || 0,
+          snippets:       n.snippets || [],
+        }, null, 2));
+        await writable.close();
+      } catch (err) { log(`Node save error (${n.id}): ${err.message}`, "err"); }
+    }
+
+    // ── Write the graph index: spore-index.json ───────────
+    async function saveIndex() {
       if (!brainDirHandle) return;
       try {
         const permanent   = neurons.filter(n => n.type === "permanent" && !n.dead);
-        const neuronIndex = new Map(permanent.map((n, i) => [n, i]));
+        const idMap       = new Map(permanent.map(n => [n, n.id]));
         const data = {
-          version: 2,
+          version: 3,
           savedAt:      new Date().toISOString(),
           currentLevel, levelIter, levelPasses,
-          neurons: permanent.map(n => ({
-            concept: n.concept, x: n.x, y: n.y, layer: n.layer,
-            url: n.url, snippet: n.snippet, source: n.source,
-            knowledgeCount: n.knowledgeCount || 0,
-            snippets: n.snippets || [],
-          })),
+          neurons: permanent.map(n => n.id),
           synapses: synapses
-            .filter(s => neuronIndex.has(s.a) && neuronIndex.has(s.b))
-            .map(s => ({ a: neuronIndex.get(s.a), b: neuronIndex.get(s.b), strength: s.strength })),
+            .filter(s => idMap.has(s.a) && idMap.has(s.b))
+            .map(s => ({ a: idMap.get(s.a), b: idMap.get(s.b), strength: s.strength })),
         };
-        const fh       = await brainDirHandle.getFileHandle("spore-brain.json", { create: true });
+        const fh       = await brainDirHandle.getFileHandle("spore-index.json", { create: true });
         const writable = await fh.createWritable();
         await writable.write(JSON.stringify(data, null, 2));
         await writable.close();
-        log(`Brain saved — ${data.neurons.length} neurons, ${data.synapses.length} synapses (level ${currentLevel})`, "ok");
-      } catch (err) { log(`Save error: ${err.message}`, "err"); }
+      } catch (err) { log(`Index save error: ${err.message}`, "err"); }
     }
 
+    // ── Full save: every node file + index ────────────────
+    async function saveBrain() {
+      if (!brainDirHandle) return;
+      const permanent = neurons.filter(n => n.type === "permanent" && !n.dead);
+      await Promise.all(permanent.map(saveNodeFile));
+      await saveIndex();
+      log(`Brain saved — ${permanent.length} node files + index (level ${currentLevel})`, "ok");
+    }
+
+    // ── Load brain from node files + index ────────────────
     async function loadBrain() {
       if (!brainDirHandle) return;
       try {
-        const fh   = await brainDirHandle.getFileHandle("spore-brain.json");
-        const file = await fh.getFile();
-        const data = JSON.parse(await file.text());
+        const idxFh  = await brainDirHandle.getFileHandle("spore-index.json");
+        const index  = JSON.parse(await (await idxFh.getFile()).text());
+        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes");
 
-        neurons.length = 0; synapses.length = 0;
-        data.neurons.forEach(n => {
-          const node = new Neuron(n.concept, n.x, n.y, n.layer,
-            { url: n.url, snippet: n.snippet, source: n.source });
-          node.type           = "permanent";
-          node.knowledgeCount = n.knowledgeCount || 0;
-          node.snippets       = n.snippets || (n.snippet ? [{ url: n.url, text: n.snippet, source: n.source }] : []);
-          neurons.push(node);
-        });
-        (data.synapses || []).forEach(s => {
-          if (neurons[s.a] && neurons[s.b]) {
-            const syn = new Synapse(neurons[s.a], neurons[s.b]);
+        // Read every node file listed in the index
+        const nodeMap = new Map(); // id → Neuron
+        await Promise.all((index.neurons || []).map(async id => {
+          try {
+            const fh   = await nodesDir.getFileHandle(`${id}.json`);
+            const data = JSON.parse(await (await fh.getFile()).text());
+            const n    = new Neuron(data.concept, data.x, data.y, data.layer,
+              { id: data.id, url: data.snippets?.[0]?.url || null,
+                snippet: data.snippets?.[0]?.text || null, source: data.source });
+            n.type           = "permanent";
+            n.id             = data.id;
+            n.knowledgeCount = data.knowledgeCount || 0;
+            n.snippets       = data.snippets || [];
+            n.createdAt      = data.createdAt || n.createdAt;
+            nodeMap.set(id, n);
+          } catch (e) {
+            // Node file missing — create a dead placeholder so it fades properly
+            if (e.name === "NotFoundError") log(`⚠ Missing node file: ${id}.json`, "warn");
+          }
+        }));
+
+        neurons.length  = 0;
+        synapses.length = 0;
+        nodeMap.forEach(n => neurons.push(n));
+
+        (index.synapses || []).forEach(s => {
+          const a = nodeMap.get(s.a), b = nodeMap.get(s.b);
+          if (a && b) {
+            const syn = new Synapse(a, b);
             syn.strength = s.strength ?? 0.08;
             synapses.push(syn);
           }
         });
-        // Restore curriculum progress
-        if (data.currentLevel) { currentLevel = data.currentLevel; levelIter = data.levelIter || 0; levelPasses = data.levelPasses || 0; }
+
+        if (index.currentLevel) { currentLevel = index.currentLevel; levelIter = index.levelIter || 0; levelPasses = index.levelPasses || 0; }
         updateLevelDisplay();
         syncUI();
-        log(`Brain loaded — ${neurons.length} neurons, ${synapses.length} synapses (level ${currentLevel})`, "ok");
+        log(`Brain loaded — ${neurons.length} nodes (level ${currentLevel})`, "ok");
       } catch (err) {
-        if (err.name === "NotFoundError") {
-          log("No saved brain found — starting fresh", "warn");
-        } else {
-          log(`Load error: ${err.message}`, "err");
-        }
+        if (err.name === "NotFoundError") log("No saved brain found — starting fresh", "warn");
+        else log(`Load error: ${err.message}`, "err");
       }
     }
 
     document.getElementById("save-brain").onclick = saveBrain;
     document.getElementById("load-brain").onclick  = loadBrain;
 
-    // ── Dead-node detection: watch for brain file deletion ─
-    // Every 30 s, if a folder is set, confirm spore-brain.json still exists.
+    // ── Dead-node detection: scan nodes/ dir every 30 s ───
+    // Any node file that has been deleted from disk dies in the visualizer.
     setInterval(async () => {
       if (!brainDirHandle) return;
       try {
-        await brainDirHandle.getFileHandle("spore-brain.json");
-      } catch (e) {
-        if (e.name === "NotFoundError") {
-          const living = neurons.filter(n => n.type === "permanent" && !n.dead);
-          if (living.length > 0) {
-            log("⚠ spore-brain.json was deleted — neurons fading…", "err");
-            living.forEach(n => { n.dead = true; });
-            synapses.forEach(s => { s.dead = true; });
+        const nodesDir = await brainDirHandle.getDirectoryHandle("nodes");
+        const living   = neurons.filter(n => n.type === "permanent" && !n.dead);
+        await Promise.all(living.map(async n => {
+          try { await nodesDir.getFileHandle(`${n.id}.json`); }
+          catch (e) {
+            if (e.name === "NotFoundError") {
+              log(`💀 Node deleted: ${n.concept} (${n.id}.json)`, "err");
+              n.dead = true;
+              synapses.forEach(s => { if (s.a === n || s.b === n) s.dead = true; });
+              await saveIndex(); // update index to remove the dead node
+            }
           }
-        }
-      }
+        }));
+      } catch (_) {}
     }, 30000);
 
     // ── Auto-restore folder handle from previous session ──
