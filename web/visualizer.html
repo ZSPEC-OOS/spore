@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPORE NLWS Visualizer</title>
+  <title>SPORE — System for Progressive Online Research & Evolution</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #0a0a1a; color: #00f2ff; font-family: "Courier New", monospace; overflow: hidden; }
@@ -76,8 +76,6 @@
     #training-sandbox::-webkit-scrollbar-thumb { background: #ff8c0044; border-radius: 4px; }
     #ts-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
     #ts-header h3 { font-size:13px; color:#ff8c00; }
-    .ts-btns { display:flex; gap:6px; }
-    .ts-btns button { width:auto; padding:4px 10px; font-size:11px; }
     .ts-metric { display:flex; justify-content:space-between; font-size:11px; margin-top:4px; color:#8deaff; }
     .ts-metric span:last-child { color:#fff; }
     #ts-status { margin-top:8px; font-size:11px; color:#ff8c00; min-height:14px; }
@@ -230,7 +228,8 @@
   <canvas id="canvas"></canvas>
 
   <aside id="ui">
-    <h3>🧠 SPORE NLWS</h3>
+    <h3>🧠 SPORE</h3>
+    <p style="font-size:9px;color:#8deaff;margin:0 0 6px;letter-spacing:.04em">System for Progressive Online Research &amp; Evolution</p>
     <div class="stat"><span>Phase</span><span id="phase">Initialization</span></div>
     <div class="stat"><span>Neurons</span><span id="neurons">6</span></div>
     <div class="stat"><span>Synapses</span><span id="synapses">5</span></div>
@@ -285,6 +284,20 @@
 
       <div id="log"></div>
     </div><!-- /#ai-collapsible -->
+
+    <!-- ── Brain Storage ──────────────────────────────── -->
+    <section class="section" id="brain-storage">
+      <h4>🗂 Brain Storage</h4>
+      <div class="row">
+        <button id="choose-folder">📁 Choose Folder</button>
+      </div>
+      <div id="folder-path" style="font-size:10px;color:#8deaff;margin-top:4px;word-break:break-all;min-height:13px">No folder selected — brain lives in memory only</div>
+      <div class="row">
+        <button id="save-brain" disabled>💾 Save Brain</button>
+        <button id="load-brain" disabled>📂 Load Brain</button>
+      </div>
+      <p class="hint">Saves as <code>spore-brain.json</code>. Auto-saves after each committed training cycle.</p>
+    </section>
   </aside>
 
   <!-- ── Panel edge tabs ──────────────────────────────── -->
@@ -305,10 +318,7 @@
   <div id="training-sandbox">
     <div id="ts-header">
       <h3>🎓 Training Sandbox</h3>
-      <div class="ts-btns">
-        <button id="ts-start">▶ Start</button>
-        <button id="ts-stop" disabled>⏹ Stop</button>
-      </div>
+      <span id="ts-live-badge" style="font-size:10px;color:#8deaff;opacity:0.6">● idle</span>
     </div>
     <div class="ts-metric"><span>Cycles</span><span id="ts-cycles">0</span></div>
     <div class="ts-metric"><span>Commits</span><span id="ts-commits">0</span></div>
@@ -800,12 +810,23 @@
       isLearning = true;
       document.getElementById("phase").textContent = "General Language";
       log("Starting general language acquisition…");
+
+      // AI-driven training loop: generates natural language questions,
+      // searches for context, and commits knowledge autonomously.
+      if (!isTraining) {
+        isTraining = true;
+        document.getElementById("ts-live-badge").textContent = "● active";
+        document.getElementById("ts-live-badge").style.opacity = "1";
+        runTrainingCycle();
+      }
+
+      // Supplemental: static general queries feed the knowledge graph in parallel.
       for (const q of GENERAL_QUERIES) {
         if (!isLearning) break;
         try { await learnFromQuery(q); } catch (e) { log(`Search error: ${e.message}`, "err"); }
         await new Promise(r => setTimeout(r, 600));
       }
-      log("General acquisition complete");
+      log("General queries complete — AI training continues");
     };
 
     document.getElementById("specialize").onclick = async () => {
@@ -832,6 +853,20 @@
 
     document.getElementById("pause").onclick = () => {
       isLearning = !isLearning;
+      isTraining = isLearning;
+      const badge = document.getElementById("ts-live-badge");
+      if (isLearning) {
+        // Resuming — restart training loop
+        badge.textContent = "● active";
+        badge.style.opacity = "1";
+        runTrainingCycle();
+      } else {
+        // Pausing — stop loop after current cycle and clear working memory
+        clearCtxPool();
+        tsStatus("Paused");
+        badge.textContent = "● paused";
+        badge.style.opacity = "0.6";
+      }
       log(isLearning ? "Resumed learning" : "Paused learning");
     };
 
@@ -1286,8 +1321,9 @@
       if (!cfg.api_key || !cfg.model_id) {
         tsStatus("⚠ Configure AI model first");
         isTraining = false;
-        document.getElementById("ts-start").disabled = false;
-        document.getElementById("ts-stop").disabled  = true;
+        isLearning = false;
+        const badge = document.getElementById("ts-live-badge");
+        badge.textContent = "● idle"; badge.style.opacity = "0.6";
         return;
       }
 
@@ -1399,6 +1435,7 @@ Reply ONLY with this JSON (no other text):
           document.getElementById("ts-commits").textContent = tsCommits;
           tsStatus(`✅ Cycle ${tsCycles} — committed to knowledge bank`);
           log(`Training cycle ${tsCycles}: committed (score ${result.score.toFixed(2)})`, "ok");
+          saveBrain(); // auto-save to chosen folder (no-op if none selected)
         } else {
           clearCtxPool();
           tsStatus(`❌ Cycle ${tsCycles} — knowledge discarded`);
@@ -1416,26 +1453,81 @@ Reply ONLY with this JSON (no other text):
       if (isTraining) {
         await new Promise(r => setTimeout(r, 2500));
         if (isTraining) runTrainingCycle();
+      } else {
+        const badge = document.getElementById("ts-live-badge");
+        badge.textContent = "● idle"; badge.style.opacity = "0.6";
       }
     }
 
-    document.getElementById("ts-start").onclick = () => {
-      if (isTraining) return;
-      isTraining = true;
-      document.getElementById("ts-start").disabled = true;
-      document.getElementById("ts-stop").disabled  = false;
-      log("Training sandbox started");
-      runTrainingCycle();
+
+    // ── Brain Storage (File System Access API) ───────────
+    let brainDirHandle = null;
+
+    document.getElementById("choose-folder").onclick = async () => {
+      if (!window.showDirectoryPicker) {
+        log("File System Access API not supported in this browser", "err");
+        return;
+      }
+      try {
+        brainDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+        document.getElementById("folder-path").textContent = `📁 ${brainDirHandle.name}`;
+        document.getElementById("save-brain").disabled = false;
+        document.getElementById("load-brain").disabled = false;
+        log(`Brain folder: ${brainDirHandle.name}`, "ok");
+      } catch (err) {
+        if (err.name !== "AbortError") log(`Folder error: ${err.message}`, "err");
+      }
     };
 
-    document.getElementById("ts-stop").onclick = () => {
-      isTraining = false;
-      document.getElementById("ts-start").disabled = false;
-      document.getElementById("ts-stop").disabled  = true;
-      clearCtxPool();
-      tsStatus("Stopped");
-      log("Training sandbox stopped");
-    };
+    async function saveBrain() {
+      if (!brainDirHandle) return;
+      try {
+        const permanent = neurons.filter(n => n.type === "permanent");
+        const neuronIndex = new Map(permanent.map((n, i) => [n, i]));
+        const data = {
+          version: 1,
+          savedAt: new Date().toISOString(),
+          neurons: permanent.map(n => ({
+            concept: n.concept, x: n.x, y: n.y, layer: n.layer,
+            url: n.url, snippet: n.snippet, source: n.source,
+          })),
+          synapses: synapses
+            .filter(s => neuronIndex.has(s.a) && neuronIndex.has(s.b))
+            .map(s => ({ a: neuronIndex.get(s.a), b: neuronIndex.get(s.b), weight: s.weight || 1 })),
+        };
+        const fh  = await brainDirHandle.getFileHandle("spore-brain.json", { create: true });
+        const writable = await fh.createWritable();
+        await writable.write(JSON.stringify(data, null, 2));
+        await writable.close();
+        log(`Brain saved — ${data.neurons.length} neurons, ${data.synapses.length} synapses`, "ok");
+      } catch (err) { log(`Save error: ${err.message}`, "err"); }
+    }
+
+    async function loadBrain() {
+      if (!brainDirHandle) return;
+      try {
+        const fh   = await brainDirHandle.getFileHandle("spore-brain.json");
+        const file = await fh.getFile();
+        const data = JSON.parse(await file.text());
+        neurons.length  = 0;
+        synapses.length = 0;
+        data.neurons.forEach(n => {
+          const node = new Neuron(n.concept, n.x, n.y, n.layer,
+            { url: n.url, snippet: n.snippet, source: n.source });
+          node.type = "permanent";
+          neurons.push(node);
+        });
+        (data.synapses || []).forEach(s => {
+          if (neurons[s.a] && neurons[s.b])
+            synapses.push(new Synapse(neurons[s.a], neurons[s.b]));
+        });
+        syncUI();
+        log(`Brain loaded — ${neurons.length} neurons, ${synapses.length} synapses`, "ok");
+      } catch (err) { log(`Load error: ${err.message}`, "err"); }
+    }
+
+    document.getElementById("save-brain").onclick = saveBrain;
+    document.getElementById("load-brain").onclick  = loadBrain;
 
     // ── Startup ──────────────────────────────────────────
     loadAiConfigFromStorage();
