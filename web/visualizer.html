@@ -26,6 +26,9 @@
     button:hover { background: #00f2ff; color: #0a0a1a; }
     #log { margin-top: 10px; max-height: 120px; overflow: auto; font-size: 11px; }
     #log div { margin-bottom: 4px; color: #8deaff; }
+    #ai-config { margin-top: 12px; border-top: 1px solid rgba(0,242,255,0.25); padding-top: 10px; }
+    #ai-config h4 { font-size: 12px; margin-bottom: 6px; }
+    #ai-config .hint { font-size: 10px; color: #8deaff; margin-top: 6px; line-height: 1.3; }
   </style>
 </head>
 <body>
@@ -40,6 +43,15 @@
     <div class="row"><button id="general">Learn General</button><button id="pause">Pause/Resume</button></div>
     <div class="row"><input id="topic" placeholder="topic e.g. quantum computing" /></div>
     <div class="row"><button id="specialize">Specialize Topic</button><button id="ask">Ask</button></div>
+    <section id="ai-config">
+      <h4>AI Model Config (Search/Crawl)</h4>
+      <div class="row"><input id="ai-name" placeholder="Name" /></div>
+      <div class="row"><input id="ai-model" placeholder="Model ID" /></div>
+      <div class="row"><input id="ai-base-url" placeholder="Base URL" /></div>
+      <div class="row"><input id="ai-api-key" placeholder="API Key" type="password" /></div>
+      <div class="row"><button id="save-ai-config">Save Config</button></div>
+      <p class="hint">Stored locally for now. Runtime usage lives in backend CLI via <code>ai config</code>.</p>
+    </section>
     <div id="log"></div>
   </aside>
   <script>
@@ -267,6 +279,30 @@
       log(hits ? `Activated ${hits} nodes for question` : "No relevant nodes yet; continue learning");
     };
 
+    function loadAiConfigForm() {
+      const raw = localStorage.getItem("sporeAiConfig");
+      if (!raw) return;
+      try {
+        const config = JSON.parse(raw);
+        document.getElementById("ai-name").value = config.name || "";
+        document.getElementById("ai-model").value = config.modelId || "";
+        document.getElementById("ai-base-url").value = config.baseUrl || "";
+        document.getElementById("ai-api-key").value = config.apiKey || "";
+      } catch (_) {}
+    }
+
+    document.getElementById("save-ai-config").onclick = () => {
+      const config = {
+        name: document.getElementById("ai-name").value.trim(),
+        modelId: document.getElementById("ai-model").value.trim(),
+        baseUrl: document.getElementById("ai-base-url").value.trim(),
+        apiKey: document.getElementById("ai-api-key").value.trim(),
+      };
+      localStorage.setItem("sporeAiConfig", JSON.stringify(config));
+      log("Saved AI model config spot (backend uses CLI: ai config / ai test)");
+    };
+
+    loadAiConfigForm();
     boot();
   </script>
 </body>

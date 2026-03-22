@@ -29,9 +29,31 @@ Commands:
 - `ask <question>`
 - `visualize`
 - `status`
+- `ai show`
+- `ai config`
+- `ai test`
 - `exit`
 
-> Note: The crawler is implemented with a **mock provider** by default so it runs locally without network dependencies.
+> Note: The crawler prefers DuckDuckGo when `duckduckgo-search` is installed, and falls back to the built-in mock provider when unavailable.
+
+### Optional AI model configuration for crawl/query enhancement
+
+The AI model is only used to enrich crawl/search query generation and connectivity validation (not chat responses).
+
+Configure via environment variables or interactively in CLI with `ai config`.
+
+```bash
+export SPORE_AI_MODEL_NAME="Crawler Model"
+export SPORE_AI_MODEL_ID="gpt-4o-mini"
+export SPORE_AI_BASE_URL="https://api.openai.com/v1"   # optional
+export SPORE_AI_API_KEY="sk-..."
+```
+
+Optional dependencies:
+
+```bash
+pip install duckduckgo-search openai
+```
 
 ### 2) Open the site
 
@@ -45,4 +67,3 @@ The main extension points are intentionally explicit:
 - `DuckDuckGoCrawler._extract_content()` to bind extraction/scraping pipeline
 - `LanguageLearningEngine._synthesize_response()` to route to a model/runtime
 - persistence hooks for memory and graph state snapshots
-
