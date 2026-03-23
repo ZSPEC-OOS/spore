@@ -9,3 +9,19 @@ duckduckgo-search>=6.0.0
 
 # Optional – enables external AI model enrichment during web crawls
 openai>=1.0.0
+
+# ── Activation pipeline (spore/activation_pipeline/) ──────────────────────
+# Core — mechanistic interpretability + activation hooks
+transformer_lens>=2.0.0
+
+# Core — tensor ops (already a transitive dep of transformer_lens)
+torch>=2.1.0
+
+# Progress bars
+tqdm>=4.66.0
+
+# Optional — stream openwebtext corpus
+# datasets>=2.19.0
+
+# Optional — nnsight alternative hook backend
+# nnsight>=0.3.0
