@@ -33,6 +33,14 @@ from spore import (
     SearchProvider,
 )
 from spore.nlf import NLFFramework
+from spore.spore_ai import (
+    SporeAIEngine,
+    GenerateRequest,
+    FeedbackMode,
+    FeedbackRecord,
+    SelectionPolicy,
+    Candidate,
+)
 
 # ---------------------------------------------------------------------------
 # Config persistence (local JSON file — Firebase sync happens in the browser)
@@ -41,10 +49,25 @@ from spore.nlf import NLFFramework
 _CONFIG_PATH = Path(__file__).parent / "data" / "config.json"
 _NLF_STATE_PATH = Path(__file__).parent / "data" / "nlf_state.json"
 _NLF_STAGES_DIR = Path(__file__).parent / "data" / "nlf" / "stages"
+_SPORE_AI_FEEDBACK_PATH = Path(__file__).parent / "data" / "spore_ai_feedback.json"
 _WEB_DIR     = Path(__file__).parent / "web"
 
 # Singleton NLF framework (loaded lazily)
 _nlf_framework: NLFFramework | None = None
+
+# Singleton SPORE AI engine (loaded lazily)
+_spore_ai_engine: SporeAIEngine | None = None
+
+
+def _get_spore_ai() -> SporeAIEngine:
+    global _spore_ai_engine
+    if _spore_ai_engine is None:
+        config = _load_config()
+        _spore_ai_engine = SporeAIEngine(
+            config=config,
+            feedback_path=_SPORE_AI_FEEDBACK_PATH,
+        )
+    return _spore_ai_engine
 
 
 def _get_nlf() -> NLFFramework:
@@ -131,6 +154,25 @@ class NLFCycleRequest(BaseModel):
     category_id: str
     gold_map: Optional[dict] = None
     max_instances: int = 100
+
+
+class SporeGenerateRequest(BaseModel):
+    """Input protocol (§3.3.1)."""
+    query:            str
+    num_candidates:   int   = 4
+    temperature:      float = 0.7
+    top_k:            int   = 40
+    top_p:            float = 0.95
+    selection_policy: str   = "argmax"
+
+
+class SporeFeedbackRequest(BaseModel):
+    """Feedback submission for the SPORE AI feedback loop (§2.2.7)."""
+    query:           str
+    candidates:      list   # [{"text": str, "score": float}]
+    selected_index:  int
+    preferred_index: Optional[int] = None
+    mode:            str    = "supervised"
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +394,103 @@ async def nlf_mastery():
     """Return full mastery report across all loaded stages."""
     fw = _get_nlf()
     return fw.mastery_report()
+
+
+# ---------------------------------------------------------------------------
+# SPORE AI Framework routes (§3.3)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/generate")
+async def generate(req: SporeGenerateRequest):
+    """
+    SPORE AI generate endpoint (§3.3.1 / §3.3.2).
+
+    Runs the full pipeline: Candidate Expansion → Ranking → Selection.
+
+    Input:
+        { "query": str, "num_candidates": int }
+
+    Output:
+        { "best_response": str, "candidates": [{"text": str, "score": float}] }
+    """
+    from fastapi import HTTPException
+
+    if not req.query.strip():
+        raise HTTPException(status_code=422, detail="query must not be empty.")
+
+    try:
+        policy = SelectionPolicy(req.selection_policy)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid selection_policy '{req.selection_policy}'. "
+                   f"Use 'argmax' or 'weighted'.",
+        )
+
+    engine = _get_spore_ai()
+    engine.selector.policy = policy
+
+    request = GenerateRequest(
+        query          = req.query.strip(),
+        num_candidates = max(1, req.num_candidates),
+        temperature    = max(0.0, min(1.5, req.temperature)),
+        top_k          = max(1, min(100, req.top_k)),
+        top_p          = max(0.8, min(1.0, req.top_p)),
+        selection_policy = policy,
+    )
+
+    try:
+        response = await engine.generate(request)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Generation failed: {exc}")
+
+    return {
+        "best_response": response.best_response,
+        "candidates": [
+            {"text": c.text, "score": c.score}
+            for c in response.candidates
+        ],
+    }
+
+
+@app.post("/generate/feedback")
+async def generate_feedback(req: SporeFeedbackRequest):
+    """
+    Submit feedback for a previous /generate call (§2.2.7).
+
+    Updates the SPORE AI feedback loop for supervised fine-tuning or
+    preference learning.
+    """
+    from fastapi import HTTPException
+
+    try:
+        mode = FeedbackMode(req.mode)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid mode '{req.mode}'. Use 'supervised' or 'preference_learning'.",
+        )
+
+    candidates = [
+        Candidate(text=c["text"], score=float(c.get("score", 0.0)))
+        for c in req.candidates
+    ]
+
+    engine = _get_spore_ai()
+    engine.record_feedback(
+        query           = req.query,
+        candidates      = candidates,
+        selected_index  = req.selected_index,
+        preferred_index = req.preferred_index,
+        mode            = mode,
+    )
+
+    return {
+        "status": "recorded",
+        "mode":   mode.value,
+        "query":  req.query,
+    }
 
 
 # Serve static assets from web/ (must be mounted before the catch-all GET /)

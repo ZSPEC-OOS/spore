@@ -10,6 +10,7 @@ from .engine import LanguageLearningEngine
 from .models import LearningPhase, MemoryNode, Neuron
 from .search import DuckDuckGoSearchProvider, SearchProvider
 from .visualizer import NeuralNetworkVisualizer
+from .spore_ai import SporeAIEngine
 
 __all__ = [
     "LearningPhase",
@@ -22,4 +23,5 @@ __all__ = [
     "DuckDuckGoCrawler",
     "NeuralNetworkVisualizer",
     "LanguageLearningEngine",
+    "SporeAIEngine",
 ]
