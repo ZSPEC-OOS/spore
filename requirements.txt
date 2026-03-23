@@ -25,3 +25,12 @@ tqdm>=4.66.0
 
 # Optional — nnsight alternative hook backend
 # nnsight>=0.3.0
+
+# ── Dimensionality reduction (spore/activation_pipeline/reduction.py) ──────
+umap-learn>=0.5.6
+scikit-learn>=1.4.0
+pandas>=2.1.0
+numpy>=1.26.0
+
+# Optional — Parquet I/O for save_projection / load_projection
+# pyarrow>=15.0.0
