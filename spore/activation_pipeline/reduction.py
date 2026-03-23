@@ -520,9 +520,10 @@ class ProjectionSuite:
 
             # base metadata for this layer
             meta: Dict[str, Any] = {
-                "layer": layer,
-                "index": list(range(len(run.texts))),
-                "text":  run.texts,
+                "layer":           layer,
+                "index":           list(range(len(run.texts))),
+                "text":            run.texts,
+                "activation_norm": np.linalg.norm(acts, axis=-1).astype(np.float32),
             }
             if run.labels is not None:
                 meta["label"] = run.labels
