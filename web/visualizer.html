@@ -13,327 +13,162 @@
       --muted: #8b949e;
       --blue: #58a6ff;
       --green: #2ea043;
-      --amber: #e3b341;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--txt);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* ── Top bar ─────────────────────────────────────────────── */
-    .topbar {
+      min-height: 100vh;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 0 16px;
-      height: 48px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+      justify-content: center;
+      padding: 2rem 1rem;
     }
-    .topbar-title {
-      font-size: 0.95rem;
-      font-weight: 600;
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem 2.5rem;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
       color: var(--txt);
+      margin-bottom: 0.5rem;
       letter-spacing: -0.01em;
     }
-    .topbar-sub {
-      font-size: 0.78rem;
+    p {
+      font-size: 0.9rem;
       color: var(--muted);
-    }
-    .topbar-sep { flex: 1; }
-
-    .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #484f58; display: inline-block;
-      transition: background 0.3s;
-    }
-    .dot.online { background: var(--green); box-shadow: 0 0 6px #2ea04366; }
-
-    .btn-sm {
-      font-size: 0.78rem; padding: 4px 12px; border-radius: 6px;
-      border: 1px solid var(--border); background: transparent;
-      color: var(--txt); cursor: pointer; text-decoration: none;
-      display: inline-flex; align-items: center; gap: 4px;
-    }
-    .btn-sm:hover { border-color: var(--blue); color: var(--blue); }
-    .btn-sm.primary { background: #1f4068; border-color: #2d5f9e; }
-
-    /* ── iframe fill area ───────────────────────────────────── */
-    #frame-area {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
     }
 
-    #streamlit-frame {
-      width: 100%; height: 100%;
-      border: none;
-      display: none; /* shown once confirmed online */
-    }
-
-    /* ── Splash / loading state ─────────────────────────────── */
-    #splash {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 20px;
-      background: var(--bg);
-      padding: 2rem;
-    }
-
-    .splash-icon { font-size: 3.5rem; line-height: 1; }
-
-    .splash-title {
-      font-size: 1.5rem; font-weight: 700;
-      color: var(--txt); text-align: center;
-    }
-    .splash-sub {
-      font-size: 0.9rem; color: var(--muted);
-      text-align: center; max-width: 460px;
-      line-height: 1.55;
-    }
-
-    .status-box {
-      background: var(--surface);
-      border: 1px solid var(--border);
+    /* Big open button */
+    #open-btn {
+      display: block;
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #1a4a8a;
+      border: 1px solid #2d6abf;
       border-radius: 10px;
-      padding: 14px 20px;
-      width: min(480px, 90vw);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      margin-bottom: 1rem;
+      transition: background 0.15s;
     }
-    .status-row {
-      display: flex; align-items: center; gap: 10px;
-      font-size: 0.86rem; color: var(--muted);
-      padding: 5px 0;
-    }
-    .status-row + .status-row { border-top: 1px solid var(--border); }
+    #open-btn:hover { background: #1f5aa8; }
 
-    .code-block {
-      background: #0d1117;
+    /* "Or run it yourself" box */
+    .how {
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 10px 14px;
+      padding: 1rem 1.25rem;
+      text-align: left;
+      margin-top: 0.5rem;
+    }
+    .how-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    .cmd {
       font-family: "SF Mono", "Fira Code", monospace;
       font-size: 0.82rem;
       color: #c9d1d9;
-      width: min(480px, 90vw);
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: block;
+      margin-bottom: 0.5rem;
     }
-    .code-block .prompt { color: #484f58; }
-
-    .badge {
-      font-size: 0.72rem; padding: 2px 8px; border-radius: 99px;
-      border: 1px solid var(--border); color: var(--muted);
-      background: var(--surface);
-    }
-    .badge.checking { color: var(--amber); border-color: var(--amber); }
-    .badge.online   { color: var(--green); border-color: var(--green); }
-    .badge.offline  { color: #f85149;     border-color: #f85149; }
-
-    #launch-btn {
-      display: none;
-      font-size: 0.9rem; padding: 9px 20px;
-      background: #238636; border: 1px solid #2ea043;
-      color: #fff; border-radius: 8px; cursor: pointer;
-    }
-    #launch-btn:hover { background: #2ea043; }
-
-    #retry-msg {
-      font-size: 0.78rem; color: var(--muted);
-      text-align: center;
-      display: none;
+    .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
     }
 
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner {
-      width: 14px; height: 14px;
-      border: 2px solid var(--border);
-      border-top-color: var(--blue);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      flex-shrink: 0;
+    .sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 1.25rem 0;
     }
+
+    .footer {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .footer a { color: var(--blue); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
+  <div class="card">
+    <span class="icon">🧬</span>
+    <h1>Geometric Activation Visualizer</h1>
+    <p>
+      Explore transformer residual-stream activations in 2-D/3-D, inspect
+      sparse autoencoder features, and trace how token representations evolve
+      layer-by-layer.
+    </p>
 
-  <!-- Top bar -->
-  <div class="topbar">
-    <span style="font-size:1.2rem">🧬</span>
-    <span class="topbar-title">Geometric Activation Visualizer</span>
-    <span class="topbar-sub">Transformer Mechanistic Insights — SPORE</span>
-    <span class="topbar-sep"></span>
-    <span class="dot" id="status-dot"></span>
-    <span id="status-label" class="badge checking">Connecting…</span>
-    <a class="btn-sm" href="/training.html">Training</a>
-    <button class="btn-sm" onclick="retryConnect()">↻ Retry</button>
-  </div>
+    <a id="open-btn" href="#" target="_blank">Open Visualizer Dashboard ↗</a>
 
-  <!-- Main area: iframe fills everything below the topbar -->
-  <div id="frame-area">
-
-    <iframe
-      id="streamlit-frame"
-      allow="clipboard-read; clipboard-write"
-      title="Geometric Activation Visualizer"
-    ></iframe>
-
-    <div id="splash">
-      <div class="splash-icon">🧬</div>
-
-      <div class="splash-title">Geometric Activation Visualizer</div>
-      <div class="splash-sub">
-        Projects transformer residual-stream activations into interactive 2-D/3-D maps,
-        decomposes them with a Sparse Autoencoder, and traces how token representations
-        evolve layer-by-layer.
-      </div>
-
-      <div class="status-box">
-        <div class="status-row">
-          <span class="spinner" id="spinner"></span>
-          <span id="splash-status">Looking for the Streamlit dashboard…</span>
-        </div>
-      </div>
-
-      <button id="launch-btn" onclick="retryConnect()">⟳ Reload dashboard</button>
-
-      <div id="retry-msg">
-        The dashboard isn't running yet. Start it with:
-      </div>
-
-      <div class="code-block" id="start-cmd" style="display:none">
-        <span class="prompt">$ </span>streamlit run streamlit_app.py
-      </div>
-
-      <div id="port-hint" style="font-size:0.75rem;color:var(--muted);display:none">
-        Then reload this page — it will connect automatically.
+    <div class="how">
+      <div class="how-title">If the dashboard isn't open yet, start it:</div>
+      <code class="cmd">streamlit run streamlit_app.py</code>
+      <div class="hint">
+        Then click the button above — it opens in a new tab.
       </div>
     </div>
 
+    <hr class="sep" />
+
+    <div class="footer">
+      Other tools: <a href="/training.html">Training workspace</a>
+    </div>
   </div>
 
   <script>
-    // ── Port detection ──────────────────────────────────────────────────────
-    // In dev environments the Streamlit port is often proxied to the same
-    // host at a different path or port.  We try a few options in order.
-    const CANDIDATES = [
-      { url: `${location.protocol}//${location.hostname}:8501`, label: ':8501' },
-      { url: `${location.protocol}//${location.hostname}:8502`, label: ':8502' },
-    ];
-    // If running behind a path-based proxy (e.g. /streamlit/), also try that
-    if (location.pathname.includes('/streamlit')) {
-      CANDIDATES.unshift({ url: `${location.origin}/streamlit`, label: 'proxy' });
-    }
+    // Build the Streamlit URL from the current page URL.
+    // Works for localhost, GitHub Codespaces, and most cloud dev proxies
+    // (which use hostname patterns like PORTNUM-rest-of-host).
+    (function () {
+      var h = location.hostname;
+      var proto = location.protocol;
+      var streamlitUrl;
 
-    let _foundUrl = null;
-    let _attempts = 0;
-    const MAX_AUTO_RETRY = 6;   // give up after ~30s and show instructions
-    const RETRY_MS       = 5000;
-
-    function setStatus(state, text) {
-      const dot   = document.getElementById('status-dot');
-      const label = document.getElementById('status-label');
-      dot.className   = 'dot ' + (state === 'online' ? 'online' : '');
-      label.className = 'badge ' + state;
-      label.textContent = text;
-    }
-
-    async function pingUrl(url) {
-      try {
-        // A HEAD request to the Streamlit health endpoint is lightweight
-        const r = await fetch(url + '/healthz', {
-          method: 'GET',
-          mode: 'no-cors',   // cross-origin: we just need to know it responds
-          signal: AbortSignal.timeout(2500),
-        });
-        return true;   // no-cors always returns opaque response
-      } catch {
-        return false;
-      }
-    }
-
-    async function tryConnect() {
-      document.getElementById('spinner').style.display = '';
-      document.getElementById('splash-status').textContent =
-        'Looking for the Streamlit dashboard…';
-      setStatus('checking', 'Connecting…');
-
-      for (const { url, label } of CANDIDATES) {
-        const ok = await pingUrl(url);
-        if (ok) {
-          _foundUrl = url;
-          onConnected(url);
-          return;
-        }
-      }
-      onFailed();
-    }
-
-    function onConnected(url) {
-      _attempts = 0;
-      setStatus('online', 'Live');
-      document.getElementById('spinner').style.display = 'none';
-      document.getElementById('splash-status').textContent = 'Connected — loading dashboard…';
-      document.getElementById('launch-btn').style.display = 'none';
-      document.getElementById('retry-msg').style.display = 'none';
-      document.getElementById('start-cmd').style.display = 'none';
-      document.getElementById('port-hint').style.display = 'none';
-
-      const frame = document.getElementById('streamlit-frame');
-      frame.src = url;
-      frame.style.display = 'block';
-
-      // Once the iframe loads, hide the splash
-      frame.onload = () => {
-        document.getElementById('splash').style.display = 'none';
-      };
-
-      // Fallback: hide splash after 4s regardless
-      setTimeout(() => {
-        document.getElementById('splash').style.display = 'none';
-      }, 4000);
-    }
-
-    function onFailed() {
-      _attempts++;
-      document.getElementById('spinner').style.display = 'none';
-      setStatus('offline', 'Not running');
-
-      if (_attempts < MAX_AUTO_RETRY) {
-        const secs = Math.round(RETRY_MS / 1000);
-        document.getElementById('splash-status').textContent =
-          `Dashboard not found — retrying in ${secs}s… (attempt ${_attempts}/${MAX_AUTO_RETRY})`;
-        setTimeout(tryConnect, RETRY_MS);
+      // Codespaces / cloud proxies rewrite the port into the subdomain.
+      // Pattern: 8000-<something> → replace 8000 with 8501
+      var portMatch = h.match(/^(\d+)-(.+)$/);
+      if (portMatch) {
+        streamlitUrl = proto + '//' + '8501-' + portMatch[2];
+      } else if (h === 'localhost' || h === '127.0.0.1') {
+        streamlitUrl = proto + '//' + h + ':8501';
       } else {
-        // Give up auto-retrying; show manual instructions
-        document.getElementById('splash-status').textContent =
-          'Dashboard is not running.';
-        document.getElementById('launch-btn').style.display = 'block';
-        document.getElementById('retry-msg').style.display = 'block';
-        document.getElementById('start-cmd').style.display = 'block';
-        document.getElementById('port-hint').style.display = 'block';
+        // Unknown proxy — just use port 8501 on the same host as a best guess
+        streamlitUrl = proto + '//' + h + ':8501';
       }
-    }
 
-    function retryConnect() {
-      _attempts = 0;
-      document.getElementById('launch-btn').style.display = 'none';
-      document.getElementById('retry-msg').style.display = 'none';
-      document.getElementById('start-cmd').style.display = 'none';
-      document.getElementById('port-hint').style.display = 'none';
-      document.getElementById('spinner').style.display = '';
-      tryConnect();
-    }
-
-    // Kick off immediately
-    tryConnect();
+      document.getElementById('open-btn').href = streamlitUrl;
+    })();
   </script>
 </body>
 </html>
