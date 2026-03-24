@@ -37,6 +37,7 @@ from .reduction import (
     save_projection,
     to_dataframe,
 )
+from .sae_dataset import SAEDataset, SAEDatasetConfig, SnippetResult
 
 __all__ = [
     # collection
@@ -53,4 +54,8 @@ __all__ = [
     "to_dataframe",
     "save_projection",
     "load_projection",
+    # SAE dataset
+    "SAEDataset",
+    "SAEDatasetConfig",
+    "SnippetResult",
 ]
