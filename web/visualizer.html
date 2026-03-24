@@ -363,8 +363,8 @@
       <div class="tb-stat"><span class="tb-lbl">Memory</span><span class="tb-val" id="knowledge">0.0 MB</span></div>
     </div>
     <div id="tb-ctrl">
-      <button class="cvs-btn active" id="btn-viz-simple">⬡ Simple</button>
-      <button class="cvs-btn"        id="btn-viz-complex">◈ Complex</button>
+      <button class="cvs-btn"        id="btn-viz-simple" style="display:none">⬡ Simple</button>
+      <button class="cvs-btn active" id="btn-viz-complex">◈ Complex</button>
       <button class="cvs-btn" id="btn-anim-pause" style="display:none">⏸ Pause</button>
       <button class="cvs-btn" id="btn-hide-brain" style="display:none">◉ Hide</button>
       <a href="/training.html" class="cvs-btn" style="text-decoration:none;color:var(--amber);border-color:rgba(255,140,0,0.45);">🎓 Training</a>
@@ -744,8 +744,12 @@
     let isLearning = false;
     let learningProgress = 0;
 
-    // ── Visualizer mode: "simple" (default, low-CPU) | "complex" (canvas) ──
-    let vizMode = localStorage.getItem("spore-viz-mode") || "simple";
+    // ── Visualizer mode: simple is deprecated; complex is the default and enforced ──
+    let vizMode = localStorage.getItem("spore-viz-mode") || "complex";
+    if (vizMode !== "complex") {
+      vizMode = "complex";
+      localStorage.setItem("spore-viz-mode", "complex");
+    }
 
     // ── Camera (pan / zoom) ──────────────────────────────
     const camera = { x: 0, y: 0, scale: 1 };
@@ -2832,9 +2836,9 @@ Reply ONLY with JSON: {"good": true, "score": 0.85, "feedback": "one brief sente
     }
 
     document.getElementById("btn-viz-simple").onclick = () => {
-      vizMode = "simple";
+      vizMode = "complex";
       applyVizMode();
-      log("Visualizer: Simple mode (low-CPU)");
+      log("Simple visualizer has been discontinued — switched to Complex mode.", "warn");
     };
 
     document.getElementById("btn-viz-complex").onclick = () => {
