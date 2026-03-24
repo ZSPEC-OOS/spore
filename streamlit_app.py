@@ -485,6 +485,12 @@ with tab5:
 # FOOTER
 # ══════════════════════════════════════════════════════════════════════════════
 
+_pipeline_incomplete = _sidebar_status.steps_complete < 4
+if auto_refresh and not _pipeline_incomplete:
+    # Stop polling automatically once all expected artifacts are present.
+    st.session_state["_auto_refresh"] = False
+    auto_refresh = False
+
 _last_refresh = st.session_state.get("_last_refresh", "\u2014")
 _live_cls = "live" if auto_refresh else ""
 
@@ -521,7 +527,7 @@ with st.expander("\U0001f519 Legacy options", expanded=False):
 # AUTO-REFRESH  (runs at the very end so the page fully renders first)
 # ══════════════════════════════════════════════════════════════════════════════
 
-if auto_refresh:
+if auto_refresh and _pipeline_incomplete:
     time.sleep(refresh_secs)
     st.session_state["_last_refresh"] = datetime.datetime.now().strftime("%H:%M:%S")
     st.rerun()
