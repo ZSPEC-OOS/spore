@@ -34,3 +34,8 @@ numpy>=1.26.0
 
 # Optional — Parquet I/O for save_projection / load_projection
 # pyarrow>=15.0.0
+
+# ── Dashboard (streamlit_app.py) ───────────────────────────────────────────
+streamlit>=1.35.0
+plotly>=5.20.0
+pyarrow>=15.0.0     # enables Parquet I/O + Streamlit dataframe acceleration
