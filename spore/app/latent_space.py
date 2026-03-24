@@ -32,6 +32,7 @@ import streamlit as st
 
 from .loader import ProjectionStore
 from .scatter import ScatterConfig, build_scatter, color_column_options
+from .prompt_trajectory import render_prompt_trajectory_viewer
 
 # ---------------------------------------------------------------------------
 # Session-state keys
@@ -411,6 +412,9 @@ def _main_panel(ctrl: Dict[str, Any]) -> None:
         _render_selection_panel(df, selected_pts)
 
     # ── Corpus preview ───────────────────────────────────────────────────────
+    # ── Prompt trajectory viewer ─────────────────────────────────────────────
+    render_prompt_trajectory_viewer(default_root=str(Path("activations/run").resolve()))
+
     with st.expander("📄 Corpus preview (first 50 rows)", expanded=False):
         preview_cols = [c for c in ["index", "text", "label", "activation_norm", "layer"]
                         if c in df.columns]
