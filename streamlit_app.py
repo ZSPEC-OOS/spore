@@ -128,11 +128,12 @@ if st.sidebar.button("🔄 Refresh data", use_container_width=True):
 st.sidebar.markdown("---")
 st.sidebar.caption("Tip: each page also exposes local controls for deeper analysis.")
 
-page1, page2, page3, page4 = st.tabs([
+page1, page2, page3, page4, page5 = st.tabs([
     "🗺️ Page 1 — Latent Space Projections",
     "🔬 Page 2 — SAE Feature Explorer",
-    "🧭 Page 3 — Prompt Trajectory",
-    "👀 Page 4 — Attention & Logit Lens",
+    "🌐 Page 3 — SAE Feature UMAP",
+    "🧭 Page 4 — Prompt Trajectory",
+    "👀 Page 5 — Attention & Logit Lens",
 ])
 
 with page1:
@@ -146,11 +147,16 @@ with page2:
     render_sae()
 
 with page3:
+    from spore.app.feature_map import render_tab as render_feature_map
+
+    render_feature_map()
+
+with page4:
     from spore.app.prompt_trajectory import render_prompt_trajectory_viewer
 
     render_prompt_trajectory_viewer(default_root=st.session_state.get("_traj_train_root"))
 
-with page4:
+with page5:
     from spore.app.attention_logit_lens import render_tab as render_attention_lens
 
     render_attention_lens(

@@ -39,6 +39,7 @@ Multi-layer sweep
 from __future__ import annotations
 
 import logging
+import pickle
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,6 +50,25 @@ import pandas as pd
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+
+class ReducerPipeline:
+    """
+    Small wrapper that composes an optional PCA preprocessor with a reducer.
+
+    This is used for UMAP runs with ``pca_pre`` so callers can always call
+    ``transform(X_raw)`` without manually reproducing preprocessing.
+    """
+
+    def __init__(self, reducer: Any, pca: Any | None = None) -> None:
+        self.reducer = reducer
+        self.pca = pca
+
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        Xf = _to_float32(X)
+        if self.pca is not None:
+            Xf = self.pca.transform(Xf)
+        return self.reducer.transform(Xf).astype(np.float32)
 
 # ---------------------------------------------------------------------------
 # ProjectionResult
@@ -254,11 +274,13 @@ def compute_umap(
     input_d = d  # track original dim for metadata
 
     # Optional PCA pre-processing
-    pca_result: Optional[ProjectionResult] = None
+    pca_model: Any | None = None
     if pca_pre is not None and d > pca_pre:
+        from sklearn.decomposition import PCA
+
         logger.info("Pre-reducing with PCA: %d → %d dims …", d, pca_pre)
-        pca_result = compute_pca(X, n_components=pca_pre)
-        X = pca_result.coords
+        pca_model = PCA(n_components=min(pca_pre, n, d), random_state=random_state)
+        X = pca_model.fit_transform(X).astype(np.float32)
         d = X.shape[1]
 
     logger.info(
@@ -296,7 +318,7 @@ def compute_umap(
 
     return ProjectionResult(
         coords       = coords,
-        model        = reducer,
+        model        = ReducerPipeline(reducer=reducer, pca=pca_model),
         method       = "umap",
         params       = params,
         n_samples    = n,
@@ -437,6 +459,32 @@ def load_projection(path: Union[str, Path]) -> pd.DataFrame:
 
     logger.info("Loaded projection ← %s  (%d rows × %d cols)", path, len(df), len(df.columns))
     return df
+
+
+def save_projection_model(
+    result: ProjectionResult,
+    path: Union[str, Path],
+) -> Path:
+    """
+    Persist a fitted reducer model for reuse in trajectory and feature views.
+    """
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "wb") as fh:
+        pickle.dump(result.model, fh)
+    logger.info("Saved reducer model → %s", path)
+    return path
+
+
+def load_projection_model(path: Union[str, Path]) -> Any:
+    """
+    Load a reducer previously saved by :func:`save_projection_model`.
+    """
+    path = Path(path).resolve()
+    if not path.exists():
+        raise FileNotFoundError(path)
+    with open(path, "rb") as fh:
+        return pickle.load(fh)
 
 
 # ---------------------------------------------------------------------------
@@ -585,12 +633,17 @@ class ProjectionSuite:
         root = Path(root).resolve()
         root.mkdir(parents=True, exist_ok=True)
 
+        models_dir = root / "models"
+        models_dir.mkdir(parents=True, exist_ok=True)
+
         for entry in tqdm(self._entries, desc="Saving projections"):
             layer  = entry["layer"]
             method = entry["method"]
             ext    = "parquet" if fmt == "parquet" else "csv"
             path   = root / f"layer_{layer:02d}_{method}.{ext}"
             save_projection(entry["df"], path, fmt=fmt)
+            model_path = models_dir / f"layer_{layer:02d}_{method}.pkl"
+            save_projection_model(entry["result"], model_path)
 
         # PCA explained-variance summary
         if self._pca_summaries:
