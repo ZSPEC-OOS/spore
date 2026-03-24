@@ -1,46 +1,26 @@
-"""Tests for spore.visualizer — NeuralNetworkVisualizer."""
+"""Tests for spore.visualizer — GeometricActivationVisualizer."""
 
-from spore.visualizer import NeuralNetworkVisualizer
-
-
-def test_add_neuron_returns_neuron_with_correct_concept():
-    viz    = NeuralNetworkVisualizer()
-    neuron = viz.add_neuron("Language", layer=0)
-    assert neuron.concept == "Language"
-    assert neuron.layer   == 0
-    assert neuron.id in viz.neurons
+from spore.visualizer import GeometricActivationVisualizer, VERBATIM_MIGRATION_BRIEF
 
 
-def test_connect_creates_bidirectional_edge():
-    viz = NeuralNetworkVisualizer()
-    a   = viz.add_neuron("A")
-    b   = viz.add_neuron("B")
-    viz.connect(a.id, b.id)
-    assert len(viz.connections) == 1
-    assert b.id in a.connections
-    assert a.id in b.connections
+def test_migration_brief_is_exact_verbatim_text():
+    viz = GeometricActivationVisualizer()
+    assert viz.migration_brief() == VERBATIM_MIGRATION_BRIEF
+    assert "Replace the existing ball-and-web" in viz.migration_brief()
+    assert "unified Streamlit multi-tab dashboard" in viz.migration_brief()
 
 
-def test_connect_self_is_no_op():
-    viz = NeuralNetworkVisualizer()
-    a   = viz.add_neuron("A")
-    viz.connect(a.id, a.id)
-    assert len(viz.connections) == 0
+def test_module_plan_has_exactly_ten_modules():
+    viz = GeometricActivationVisualizer()
+    plan = viz.module_plan()
+    assert len(plan) == 10
+    assert plan[0].name == "activation_hooks"
+    assert plan[-1].name == "attention_logit_lens_view"
 
 
-def test_connect_duplicate_is_no_op():
-    viz = NeuralNetworkVisualizer()
-    a   = viz.add_neuron("A")
-    b   = viz.add_neuron("B")
-    viz.connect(a.id, b.id)
-    viz.connect(a.id, b.id)
-    assert len(viz.connections) == 1
-
-
-def test_generate_svg_contains_neuron_labels():
-    viz = NeuralNetworkVisualizer()
-    viz.add_neuron("Syntax")
-    svg = viz.generate_svg()
-    assert "<svg" in svg
-    assert "Syntax" in svg
-    assert "Neurons: 1" in svg
+def test_readiness_reports_empty_but_ready(tmp_path):
+    viz = GeometricActivationVisualizer()
+    state = viz.readiness(tmp_path / "artifacts")
+    assert state["dashboard_only"] is True
+    assert state["empty_but_ready"] is True
+    assert state["entrypoint"] == "streamlit_app.py"

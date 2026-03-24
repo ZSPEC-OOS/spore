@@ -1,99 +1,75 @@
-"""SVG neural network visualiser for SPORE.
+"""Geometric interpretability visualizer metadata for SPORE.
 
-NeuralNetworkVisualizer maintains a lightweight in-memory graph of Neurons
-and their connections, and renders it as an animated SVG string.
-
-Extension point: generate_svg() can be replaced with a canvas/WebGL
-renderer once the Python prototype graduates to a richer front-end.
+This module intentionally replaces the deprecated node-link / ball-and-web SVG
+visualizer with a single mechanistic-interpretability-first dashboard contract.
+The runnable UI entrypoint is ``streamlit_app.py``.
 """
 
 from __future__ import annotations
 
-import random
-from typing import Dict, Set, Tuple
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List
 
-from .models import Neuron
+
+VERBATIM_MIGRATION_BRIEF = """Replace the existing ball-and-web (node-link graph with growing node sizes) visualizer entirely with the new High-Dimensional Geometric Activation Visualizer for the transformer-based AI.
+Core concept: The model’s ‘mind’ is visualized as a continuously sculpted high-dimensional manifold in activation space. Knowledge is represented through distributed linear directions (features) via superposition rather than discrete nodes or explicit links.
+Key visualization components to implement as the single main visualizer:
+\t•\tLayer-wise UMAP/PCA projections of residual stream activations showing evolving semantic clusters and manifold refinement across training checkpoints and layers.
+\t•\tSparse Autoencoder (SAE) feature dashboard: top-activating text examples, logit effects, and UMAP of monosemantic-ish feature directions.
+\t•\tPrompt trajectory plots: animated paths of token representations through layers in projected space, with curvature and distance metrics.
+\t•\tSupporting views: attention rollout heatmaps and logit lens (evolving predictions per layer).
+The new visualizer must be built as a unified Streamlit multi-tab dashboard following the exact 10-request modular implementation (activation hooks, UMAP/PCA pipeline, SAE training, feature explorer, trajectory viewer, etc.). Discontinue and remove all code related to the old ball/web node-link visualization. All future development and displays will use only this geometric, mechanistic interpretability-style framework, which accurately reflects transformer internals: polysemantic neurons, superposition, and progressive geometric folding of the latent space."""
 
 
-class NeuralNetworkVisualizer:
-    """Generates SVG views of the evolving conceptual network."""
+@dataclass(frozen=True)
+class VisualizerModule:
+    """Named dashboard module in the 10-request geometric visualizer plan."""
 
-    def __init__(self) -> None:
-        self.neurons:     Dict[str, Neuron]         = {}
-        self.connections: Set[Tuple[str, str]]      = set()
+    name: str
+    purpose: str
 
-    def add_neuron(self, concept: str, layer: int = 1) -> Neuron:
-        neuron_id = f"{concept}_{len(self.neurons)}"
-        radius    = 100 + (layer * 80) + random.uniform(-30, 30)
-        neuron    = Neuron(
-            id      = neuron_id,
-            concept = concept,
-            layer   = layer,
-            x       = 400 + radius * (random.random() - 0.5) * 2,
-            y       = 300 + radius * (random.random() - 0.5) * 2,
-        )
-        self.neurons[neuron_id] = neuron
-        return neuron
 
-    def connect(self, n1_id: str, n2_id: str) -> None:
-        if n1_id == n2_id:
-            return
-        if n1_id in self.neurons and n2_id in self.neurons:
-            edge = tuple(sorted((n1_id, n2_id)))
-            if edge not in self.connections:
-                self.connections.add(edge)
-                self.neurons[n1_id].connections.append(n2_id)
-                self.neurons[n2_id].connections.append(n1_id)
+class GeometricActivationVisualizer:
+    """Represents the unified geometric interpretability dashboard contract.
 
-    def generate_svg(self) -> str:
-        svg_parts = [
-            '<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">',
-            "<defs>",
-            '  <radialGradient id="nodeGradient" cx="50%" cy="50%">',
-            '    <stop offset="0%"   style="stop-color:#00f2ff"/>',
-            '    <stop offset="100%" style="stop-color:#0066ff"/>',
-            "  </radialGradient>",
-            '  <filter id="glow">',
-            '    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>',
-            "    <feMerge>",
-            '      <feMergeNode in="coloredBlur"/>',
-            '      <feMergeNode in="SourceGraphic"/>',
-            "    </feMerge>",
-            "  </filter>",
-            "</defs>",
-            '<rect width="800" height="600" fill="#0a0a1a"/>',
+    This class does not render UI directly; it provides a stable API that the CLI,
+    engine, and tests can use to verify that the runtime is configured for the
+    Streamlit dashboard workflow.
+    """
+
+    streamlit_entrypoint: str = "streamlit_app.py"
+
+    def migration_brief(self) -> str:
+        """Return the required verbatim migration description for AI coders."""
+        return VERBATIM_MIGRATION_BRIEF
+
+    def module_plan(self) -> List[VisualizerModule]:
+        """Return the canonical 10-module implementation plan."""
+        return [
+            VisualizerModule("activation_hooks", "Capture residual stream and attention activations per layer/checkpoint."),
+            VisualizerModule("activation_storage", "Persist activations and metadata for reproducible downstream analysis."),
+            VisualizerModule("reduction_pipeline", "Fit and cache PCA/UMAP reducers across checkpoints and layers."),
+            VisualizerModule("latent_projection_view", "Render layer-wise projected manifolds with semantic clustering controls."),
+            VisualizerModule("sae_dataset_builder", "Build token-level datasets for sparse autoencoder training."),
+            VisualizerModule("sae_training", "Train sparse autoencoders with dead-feature handling and checkpoints."),
+            VisualizerModule("sae_feature_explorer", "Inspect feature activations, top examples, and logit effects."),
+            VisualizerModule("feature_umap_view", "Project SAE feature directions for monosemantic-ish neighborhood analysis."),
+            VisualizerModule("prompt_trajectory_viewer", "Animate token trajectories through layers with curvature/distance metrics."),
+            VisualizerModule("attention_logit_lens_view", "Show attention rollout heatmaps and per-layer logit-lens evolution."),
         ]
 
-        for n1, n2 in self.connections:
-            a       = self.neurons[n1]
-            b       = self.neurons[n2]
-            opacity = min(0.6, (a.weight + b.weight) / 2)
-            svg_parts.append(
-                f'<line x1="{a.x}" y1="{a.y}" x2="{b.x}" y2="{b.y}" '
-                f'stroke="#00f2ff" stroke-width="{opacity * 2}" opacity="{opacity}">'
-                '<animate attributeName="stroke-dasharray" '
-                'values="0,20;20,0;0,20" dur="3s" repeatCount="indefinite"/>'
-                "</line>"
-            )
+    def readiness(self, artifacts_root: str | Path = "artifacts") -> Dict[str, str | bool]:
+        """Return whether artifact directories exist for immediate visualization.
 
-        for neuron in self.neurons.values():
-            size           = 8 + (neuron.weight * 12) + (neuron.activation_count * 0.5)
-            glow_intensity = neuron.weight
-            label          = neuron.concept[:12]
-            svg_parts.append(
-                f'<circle cx="{neuron.x}" cy="{neuron.y}" r="{size}" '
-                f'fill="url(#nodeGradient)" filter="url(#glow)" '
-                f'opacity="{0.6 + glow_intensity * 0.4}">'
-                f'<animate attributeName="r" values="{size};{size * 1.2};{size}" '
-                f'dur="2s" repeatCount="indefinite"/>'
-                f"</circle>"
-                f'<text x="{neuron.x}" y="{neuron.y + 4}" text-anchor="middle" '
-                f'fill="white" font-size="8" font-family="monospace">{label}</text>'
-            )
-
-        svg_parts.append(
-            f'<text x="20" y="30" fill="#00f2ff" font-family="monospace" font-size="14">'
-            f'Neurons: {len(self.neurons)} | Connections: {len(self.connections)}</text>'
-        )
-        svg_parts.append("</svg>")
-        return "\n".join(svg_parts)
+        "Mind is empty" corresponds to a valid dashboard setup with no generated
+        artifacts yet.
+        """
+        root = Path(artifacts_root)
+        empty_but_ready = not root.exists() or not any(root.iterdir())
+        return {
+            "dashboard_only": True,
+            "entrypoint": self.streamlit_entrypoint,
+            "artifacts_root": str(root),
+            "empty_but_ready": empty_but_ready,
+        }
