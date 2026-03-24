@@ -3,432 +3,337 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPORE Unified AI Console</title>
+  <title>🧬 Geometric Activation Visualizer — SPORE</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg: #060913;
-      --surface: #0d1426;
-      --surface-2: #111c34;
-      --line: #2b3b63;
-      --txt: #d7e5ff;
-      --muted: #94a8d2;
-      --cyan: #4ce9ff;
-      --amber: #ffc857;
-      --green: #38f9a6;
-      --red: #ff7d7d;
+      --bg: #0e1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --txt: #e6edf3;
+      --muted: #8b949e;
+      --blue: #58a6ff;
+      --green: #2ea043;
+      --amber: #e3b341;
     }
 
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
       color: var(--txt);
-      background: radial-gradient(circle at top, #102042 0, #080d1b 50%, #060913 100%);
-      min-height: 100vh;
-    }
-
-    .wrap { width: min(1180px, 94vw); margin: 0 auto; padding: 26px 0 36px; }
-
-    .hero {
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      background: linear-gradient(160deg, #132446dd, #0a1020dd 70%);
-      padding: 24px;
-      box-shadow: 0 14px 42px #00000066;
-      margin-bottom: 18px;
-    }
-
-    h1 { margin: 0; color: var(--cyan); font-size: clamp(1.4rem, 2vw, 2rem); }
-    p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
-
-    .quick {
-      margin-top: 16px;
+      height: 100vh;
       display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .btn {
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--txt);
-      border-radius: 10px;
-      padding: 9px 12px;
-      text-decoration: none;
-      font-size: 0.92rem;
-      cursor: pointer;
-    }
-    .btn:hover { border-color: var(--cyan); color: var(--cyan); }
-    .btn.primary { background: #18315f; border-color: #2f5daa; }
-
-    .grid {
-      display: grid;
-      gap: 14px;
-      grid-template-columns: repeat(12, 1fr);
-    }
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: linear-gradient(180deg, var(--surface), #0b1326);
-      padding: 16px;
-    }
-    .card h2 { margin: 0 0 8px; font-size: 1.04rem; color: var(--amber); }
-    .card h3 { margin: 2px 0 8px; font-size: 0.92rem; color: var(--cyan); }
-    .card p { margin: 0 0 10px; font-size: 0.92rem; }
-
-    .card.visualizer { grid-column: span 7; }
-    .card.framework { grid-column: span 5; }
-    .card.training { grid-column: span 7; }
-    .card.stagefiles { grid-column: span 5; }
-
-    @media (max-width: 920px) {
-      .card.visualizer,
-      .card.framework,
-      .card.training,
-      .card.stagefiles { grid-column: span 12; }
-    }
-
-    .status { font-size: 0.86rem; color: var(--muted); margin-top: 8px; min-height: 18px; }
-    .status.ok { color: var(--green); }
-    .status.err { color: var(--red); }
-
-    .kpi {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0 12px;
-    }
-    .chip {
-      border: 1px solid var(--line);
-      background: var(--surface-2);
-      border-radius: 999px;
-      padding: 4px 10px;
-      font-size: 0.77rem;
-      color: var(--muted);
-    }
-
-    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .input, textarea, select {
-      width: 100%;
-      background: #081020;
-      color: var(--txt);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
-      font: inherit;
-      resize: vertical;
-    }
-    textarea { min-height: 120px; }
-
-    .field { margin-bottom: 10px; }
-    .field label { display: block; font-size: 0.78rem; margin-bottom: 4px; color: var(--muted); }
-
-    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
-    .list {
-      border: 1px solid var(--line);
-      border-radius: 10px;
+      flex-direction: column;
       overflow: hidden;
     }
-    .list button {
-      width: 100%;
-      text-align: left;
-      border: 0;
-      border-bottom: 1px solid var(--line);
-      background: #0c1730;
-      color: var(--txt);
-      padding: 9px 10px;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .list button:last-child { border-bottom: 0; }
-    .list button:hover { background: #132346; }
 
-    pre {
-      margin: 8px 0 0;
-      background: #050b18;
-      border: 1px solid var(--line);
+    /* ── Top bar ─────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      height: 48px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .topbar-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--txt);
+      letter-spacing: -0.01em;
+    }
+    .topbar-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .topbar-sep { flex: 1; }
+
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #484f58; display: inline-block;
+      transition: background 0.3s;
+    }
+    .dot.online { background: var(--green); box-shadow: 0 0 6px #2ea04366; }
+
+    .btn-sm {
+      font-size: 0.78rem; padding: 4px 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--txt); cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-sm:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-sm.primary { background: #1f4068; border-color: #2d5f9e; }
+
+    /* ── iframe fill area ───────────────────────────────────── */
+    #frame-area {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #streamlit-frame {
+      width: 100%; height: 100%;
+      border: none;
+      display: none; /* shown once confirmed online */
+    }
+
+    /* ── Splash / loading state ─────────────────────────────── */
+    #splash {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px;
+      background: var(--bg);
+      padding: 2rem;
+    }
+
+    .splash-icon { font-size: 3.5rem; line-height: 1; }
+
+    .splash-title {
+      font-size: 1.5rem; font-weight: 700;
+      color: var(--txt); text-align: center;
+    }
+    .splash-sub {
+      font-size: 0.9rem; color: var(--muted);
+      text-align: center; max-width: 460px;
+      line-height: 1.55;
+    }
+
+    .status-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px;
-      max-height: 250px;
-      overflow: auto;
-      font-size: 0.76rem;
-      line-height: 1.4;
-      color: #d4e5ff;
+      padding: 14px 20px;
+      width: min(480px, 90vw);
+    }
+    .status-row {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.86rem; color: var(--muted);
+      padding: 5px 0;
+    }
+    .status-row + .status-row { border-top: 1px solid var(--border); }
+
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 0.82rem;
+      color: #c9d1d9;
+      width: min(480px, 90vw);
+    }
+    .code-block .prompt { color: #484f58; }
+
+    .badge {
+      font-size: 0.72rem; padding: 2px 8px; border-radius: 99px;
+      border: 1px solid var(--border); color: var(--muted);
+      background: var(--surface);
+    }
+    .badge.checking { color: var(--amber); border-color: var(--amber); }
+    .badge.online   { color: var(--green); border-color: var(--green); }
+    .badge.offline  { color: #f85149;     border-color: #f85149; }
+
+    #launch-btn {
+      display: none;
+      font-size: 0.9rem; padding: 9px 20px;
+      background: #238636; border: 1px solid #2ea043;
+      color: #fff; border-radius: 8px; cursor: pointer;
+    }
+    #launch-btn:hover { background: #2ea043; }
+
+    #retry-msg {
+      font-size: 0.78rem; color: var(--muted);
+      text-align: center;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <section class="hero">
-      <h1>SPORE — Unified AI Console</h1>
-      <p>
-        One page connecting the visualizer workflow, AI framework, and training system.
-        This keeps model connectivity, local brain state, and training stage JSON access in one operational home.
-      </p>
-      <div class="quick">
-        <a class="btn primary" href="/training.html">Open Full Training Workspace</a>
-        <button class="btn" onclick="refreshAll()">Refresh all links</button>
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <span style="font-size:1.2rem">🧬</span>
+    <span class="topbar-title">Geometric Activation Visualizer</span>
+    <span class="topbar-sub">Transformer Mechanistic Insights — SPORE</span>
+    <span class="topbar-sep"></span>
+    <span class="dot" id="status-dot"></span>
+    <span id="status-label" class="badge checking">Connecting…</span>
+    <a class="btn-sm" href="/training.html">Training</a>
+    <button class="btn-sm" onclick="retryConnect()">↻ Retry</button>
+  </div>
+
+  <!-- Main area: iframe fills everything below the topbar -->
+  <div id="frame-area">
+
+    <iframe
+      id="streamlit-frame"
+      allow="clipboard-read; clipboard-write"
+      title="Geometric Activation Visualizer"
+    ></iframe>
+
+    <div id="splash">
+      <div class="splash-icon">🧬</div>
+
+      <div class="splash-title">Geometric Activation Visualizer</div>
+      <div class="splash-sub">
+        Projects transformer residual-stream activations into interactive 2-D/3-D maps,
+        decomposes them with a Sparse Autoencoder, and traces how token representations
+        evolve layer-by-layer.
       </div>
-    </section>
 
-    <section class="grid">
-      <article class="card visualizer">
-        <h2>Visualizer + Framework Link</h2>
-        <p>
-          Use this as the orchestration point: visual reasoning in the dashboard, AI generation in the framework,
-          and direct access to training cycles.
-        </p>
-        <div class="kpi" id="nlf-kpi"></div>
-        <div class="row">
-          <a class="btn" href="/training.html">Training + stage browser</a>
-          <a class="btn" href="/static/index.html">Legacy visualizer note</a>
+      <div class="status-box">
+        <div class="status-row">
+          <span class="spinner" id="spinner"></span>
+          <span id="splash-status">Looking for the Streamlit dashboard…</span>
         </div>
-        <div id="mastery-status" class="status">Loading framework status…</div>
-      </article>
+      </div>
 
-      <article class="card framework">
-        <h2>AI Framework Connection</h2>
-        <p>Connect and probe your outside model. Your saved config remains local and API-compatible.</p>
+      <button id="launch-btn" onclick="retryConnect()">⟳ Reload dashboard</button>
 
-        <div class="two">
-          <div class="field">
-            <label>Model ID</label>
-            <input id="model-id" class="input" placeholder="your-model" />
-          </div>
-          <div class="field">
-            <label>Base URL</label>
-            <input id="base-url" class="input" placeholder="https://api.provider.com/v1" />
-          </div>
-        </div>
-        <div class="field">
-          <label>API Key</label>
-          <input id="api-key" class="input" placeholder="optional" type="password" />
-        </div>
-        <div class="row">
-          <button class="btn" onclick="saveConfig()">Save connection</button>
-          <button class="btn" onclick="probeModel()">Probe model</button>
-        </div>
-        <div id="cfg-status" class="status"></div>
-      </article>
+      <div id="retry-msg">
+        The dashboard isn't running yet. Start it with:
+      </div>
 
-      <article class="card training">
-        <h2>AI-to-AI Training Link</h2>
-        <p>
-          Trigger generation and tie responses to the training framework. This page does not rely on crawling;
-          it is model-to-model interaction plus stage-driven reinforcement.
-        </p>
-        <div class="field">
-          <label>Prompt</label>
-          <textarea id="prompt" placeholder="Ask SPORE to generate candidate responses..."></textarea>
-        </div>
-        <div class="two">
-          <div class="field">
-            <label>Number of candidates</label>
-            <input id="num-candidates" class="input" type="number" min="1" max="8" value="4" />
-          </div>
-          <div class="field">
-            <label>Selection policy</label>
-            <select id="selection-policy">
-              <option value="argmax">argmax</option>
-              <option value="weighted">weighted</option>
-            </select>
-          </div>
-        </div>
-        <div class="row">
-          <button class="btn" onclick="generateResponse()">Generate with framework</button>
-        </div>
-        <div id="gen-status" class="status"></div>
-        <pre id="gen-output">No generation run yet.</pre>
-      </article>
+      <div class="code-block" id="start-cmd" style="display:none">
+        <span class="prompt">$ </span>streamlit run streamlit_app.py
+      </div>
 
-      <article class="card stagefiles">
-        <h2>Training JSON Stage Files</h2>
-        <p>Raw stage JSON files are listed here so they are directly accessible from the UI layer.</p>
-        <div id="files-status" class="status">Loading stage files…</div>
-        <div id="files-list" class="list"></div>
-        <pre id="file-output">Select a file to preview JSON.</pre>
-      </article>
-    </section>
+      <div id="port-hint" style="font-size:0.75rem;color:var(--muted);display:none">
+        Then reload this page — it will connect automatically.
+      </div>
+    </div>
+
   </div>
 
   <script>
-    async function refreshAll() {
-      await Promise.all([loadConfig(), loadMastery(), loadStageFiles()]);
+    // ── Port detection ──────────────────────────────────────────────────────
+    // In dev environments the Streamlit port is often proxied to the same
+    // host at a different path or port.  We try a few options in order.
+    const CANDIDATES = [
+      { url: `${location.protocol}//${location.hostname}:8501`, label: ':8501' },
+      { url: `${location.protocol}//${location.hostname}:8502`, label: ':8502' },
+    ];
+    // If running behind a path-based proxy (e.g. /streamlit/), also try that
+    if (location.pathname.includes('/streamlit')) {
+      CANDIDATES.unshift({ url: `${location.origin}/streamlit`, label: 'proxy' });
     }
 
-    async function loadConfig() {
-      const status = document.getElementById('cfg-status');
-      try {
-        const r = await fetch('/api/config');
-        if (!r.ok) throw new Error('Could not load config');
-        const data = await r.json();
-        document.getElementById('model-id').value = data.model || '';
-        document.getElementById('base-url').value = data.baseUrl || '';
-        status.className = 'status ok';
-        status.textContent = 'Loaded saved AI config.';
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Config load failed: ' + e.message;
-      }
+    let _foundUrl = null;
+    let _attempts = 0;
+    const MAX_AUTO_RETRY = 6;   // give up after ~30s and show instructions
+    const RETRY_MS       = 5000;
+
+    function setStatus(state, text) {
+      const dot   = document.getElementById('status-dot');
+      const label = document.getElementById('status-label');
+      dot.className   = 'dot ' + (state === 'online' ? 'online' : '');
+      label.className = 'badge ' + state;
+      label.textContent = text;
     }
 
-    async function saveConfig() {
-      const status = document.getElementById('cfg-status');
-      const payload = {
-        name: 'SPORE External Model',
-        model_id: document.getElementById('model-id').value.trim(),
-        base_url: document.getElementById('base-url').value.trim(),
-        api_key: document.getElementById('api-key').value.trim(),
-      };
+    async function pingUrl(url) {
       try {
-        const r = await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+        // A HEAD request to the Streamlit health endpoint is lightweight
+        const r = await fetch(url + '/healthz', {
+          method: 'GET',
+          mode: 'no-cors',   // cross-origin: we just need to know it responds
+          signal: AbortSignal.timeout(2500),
         });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || 'Save failed');
-        status.className = 'status ok';
-        status.textContent = 'Connection saved. Firebase/browser sync remains compatible with this API.';
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Save failed: ' + e.message;
+        return true;   // no-cors always returns opaque response
+      } catch {
+        return false;
       }
     }
 
-    async function probeModel() {
-      const status = document.getElementById('cfg-status');
-      const payload = {
-        model_id: document.getElementById('model-id').value.trim(),
-        base_url: document.getElementById('base-url').value.trim(),
-        api_key: document.getElementById('api-key').value.trim(),
-      };
-      try {
-        const r = await fetch('/api/test/ai/probe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await r.json();
-        status.className = data.ok ? 'status ok' : 'status err';
-        status.textContent = data.message || 'Probe completed.';
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Probe failed: ' + e.message;
-      }
-    }
+    async function tryConnect() {
+      document.getElementById('spinner').style.display = '';
+      document.getElementById('splash-status').textContent =
+        'Looking for the Streamlit dashboard…';
+      setStatus('checking', 'Connecting…');
 
-    async function loadMastery() {
-      const status = document.getElementById('mastery-status');
-      const kpi = document.getElementById('nlf-kpi');
-      kpi.innerHTML = '';
-      try {
-        const r = await fetch('/api/nlf/mastery');
-        if (!r.ok) throw new Error('Mastery API unavailable');
-        const data = await r.json();
-        const stages = Object.values(data || {});
-        const categories = stages.flatMap((s) => s.categories || []);
-        const mastered = categories.filter((c) => c.mastered).length;
-
-        const chips = [
-          `Stages: ${stages.length}`,
-          `Categories: ${categories.length}`,
-          `Mastered: ${mastered}`,
-        ];
-        for (const text of chips) {
-          const span = document.createElement('span');
-          span.className = 'chip';
-          span.textContent = text;
-          kpi.appendChild(span);
-        }
-
-        status.className = 'status ok';
-        status.textContent = 'Framework and training graph linked.';
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Framework status failed: ' + e.message;
-      }
-    }
-
-    async function generateResponse() {
-      const status = document.getElementById('gen-status');
-      const output = document.getElementById('gen-output');
-      const query = document.getElementById('prompt').value.trim();
-      if (!query) {
-        status.className = 'status err';
-        status.textContent = 'Prompt is required.';
-        return;
-      }
-      const payload = {
-        query,
-        num_candidates: parseInt(document.getElementById('num-candidates').value || '4', 10),
-        selection_policy: document.getElementById('selection-policy').value,
-      };
-      status.className = 'status';
-      status.textContent = 'Generating...';
-      try {
-        const r = await fetch('/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || 'Generation failed');
-        output.textContent = JSON.stringify(data, null, 2);
-        status.className = 'status ok';
-        status.textContent = 'Generation complete. Use training workspace for cycle execution.';
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Generate failed: ' + e.message;
-      }
-    }
-
-    async function loadStageFiles() {
-      const status = document.getElementById('files-status');
-      const list = document.getElementById('files-list');
-      list.innerHTML = '';
-      try {
-        const r = await fetch('/api/nlf/stage-files');
-        if (!r.ok) throw new Error('Could not list stage files');
-        const data = await r.json();
-        const files = data.files || [];
-        if (!files.length) {
-          status.className = 'status';
-          status.textContent = 'No JSON stage files found in data/nlf/stages yet.';
+      for (const { url, label } of CANDIDATES) {
+        const ok = await pingUrl(url);
+        if (ok) {
+          _foundUrl = url;
+          onConnected(url);
           return;
         }
+      }
+      onFailed();
+    }
 
-        status.className = 'status ok';
-        status.textContent = `Found ${files.length} stage JSON file(s).`;
+    function onConnected(url) {
+      _attempts = 0;
+      setStatus('online', 'Live');
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('splash-status').textContent = 'Connected — loading dashboard…';
+      document.getElementById('launch-btn').style.display = 'none';
+      document.getElementById('retry-msg').style.display = 'none';
+      document.getElementById('start-cmd').style.display = 'none';
+      document.getElementById('port-hint').style.display = 'none';
 
-        for (const file of files) {
-          const btn = document.createElement('button');
-          btn.textContent = `${file.name} (${file.size_bytes} bytes)`;
-          btn.onclick = () => previewFile(file.name);
-          list.appendChild(btn);
-        }
-      } catch (e) {
-        status.className = 'status err';
-        status.textContent = 'Stage file list failed: ' + e.message;
+      const frame = document.getElementById('streamlit-frame');
+      frame.src = url;
+      frame.style.display = 'block';
+
+      // Once the iframe loads, hide the splash
+      frame.onload = () => {
+        document.getElementById('splash').style.display = 'none';
+      };
+
+      // Fallback: hide splash after 4s regardless
+      setTimeout(() => {
+        document.getElementById('splash').style.display = 'none';
+      }, 4000);
+    }
+
+    function onFailed() {
+      _attempts++;
+      document.getElementById('spinner').style.display = 'none';
+      setStatus('offline', 'Not running');
+
+      if (_attempts < MAX_AUTO_RETRY) {
+        const secs = Math.round(RETRY_MS / 1000);
+        document.getElementById('splash-status').textContent =
+          `Dashboard not found — retrying in ${secs}s… (attempt ${_attempts}/${MAX_AUTO_RETRY})`;
+        setTimeout(tryConnect, RETRY_MS);
+      } else {
+        // Give up auto-retrying; show manual instructions
+        document.getElementById('splash-status').textContent =
+          'Dashboard is not running.';
+        document.getElementById('launch-btn').style.display = 'block';
+        document.getElementById('retry-msg').style.display = 'block';
+        document.getElementById('start-cmd').style.display = 'block';
+        document.getElementById('port-hint').style.display = 'block';
       }
     }
 
-    async function previewFile(name) {
-      const out = document.getElementById('file-output');
-      out.textContent = 'Loading ' + name + '...';
-      try {
-        const r = await fetch('/api/nlf/stage-files/' + encodeURIComponent(name));
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.detail || 'Could not load stage file');
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (e) {
-        out.textContent = 'Error: ' + e.message;
-      }
+    function retryConnect() {
+      _attempts = 0;
+      document.getElementById('launch-btn').style.display = 'none';
+      document.getElementById('retry-msg').style.display = 'none';
+      document.getElementById('start-cmd').style.display = 'none';
+      document.getElementById('port-hint').style.display = 'none';
+      document.getElementById('spinner').style.display = '';
+      tryConnect();
     }
 
-    refreshAll();
+    // Kick off immediately
+    tryConnect();
   </script>
 </body>
 </html>
