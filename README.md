@@ -107,7 +107,7 @@ pip install openai               # real AI model calls
 
 ## Unified Streamlit interpretability dashboard
 
-Run the full 4-page dashboard:
+Run the full 5-page dashboard:
 
 ```bash
 streamlit run streamlit_app.py
@@ -116,8 +116,9 @@ streamlit run streamlit_app.py
 Pages:
 - **Page 1 — Latent Space Projections**: UMAP/PCA projection explorer with layer animation.
 - **Page 2 — SAE Feature Explorer**: feature histogram, top examples, and SAE logit effects.
-- **Page 3 — Prompt Trajectory**: prompt token trajectories projected through PCA/UMAP.
-- **Page 4 — Attention & Logit Lens**: per-head/layer attention heatmaps + rollout and per-layer logit-lens top-k predictions.
+- **Page 3 — SAE Feature UMAP**: semantic organization of SAE features (cluster + activation statistics).
+- **Page 4 — Prompt Trajectory**: prompt token trajectories projected with pre-fit PCA/UMAP reducers when available.
+- **Page 5 — Attention & Logit Lens**: per-head/layer attention heatmaps + rollout and per-layer logit-lens top-k predictions.
 
 Sidebar controls include:
 - model selection
@@ -145,3 +146,7 @@ artifacts/
 ```
 
 Selecting an epoch and pressing **Apply checkpoint** updates default paths used across pages.
+
+Trajectory reuse note:
+- `reduce_activations.py` now saves fitted projection models in `projections/models/`.
+- Prompt Trajectory can load these pre-fit reducers (`layer_XX_pca.pkl` / `layer_XX_umap.pkl`) to avoid retraining reducers during inference.

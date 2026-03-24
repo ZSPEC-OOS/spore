@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from spore.activation_pipeline.io import ActivationCache
+from spore.activation_pipeline.reduction import load_projection_model
 
 
 @dataclass
@@ -47,6 +48,20 @@ def render_prompt_trajectory_viewer(default_root: str | None = None) -> None:
         method = st.selectbox("Projection", ["pca", "umap"], index=0, key="traj_method")
         color_by = st.selectbox("Color path by", ["layer", "token_type"], index=0, key="traj_color")
         max_train = st.number_input("Max training samples", min_value=100, max_value=100_000, value=5_000, step=100)
+        projection_root = st.text_input(
+            "Projection artifacts root",
+            value=st.session_state.get("_ls_root", str(Path("projections/run").resolve())),
+            help="Directory with models/layer_XX_{pca|umap}.pkl produced by reduce_activations.py",
+            key="traj_proj_root",
+        )
+        projection_layer = st.number_input(
+            "Projection layer",
+            min_value=0,
+            max_value=95,
+            value=int(st.session_state.get("_global_layer_choice", 0)),
+            step=1,
+            key="traj_proj_layer",
+        )
 
     if not st.button("Generate trajectory", use_container_width=True, type="primary"):
         return
@@ -56,15 +71,23 @@ def render_prompt_trajectory_viewer(default_root: str | None = None) -> None:
         return
 
     try:
-        reducer, reducer_meta = _fit_reducer(train_root, method=method, max_samples=int(max_train))
+        reducer, reducer_meta = _load_reducer(
+            projection_root=projection_root,
+            projection_layer=int(projection_layer),
+            method=method,
+            run_root=train_root,
+            max_samples=int(max_train),
+        )
         result = _compute_trajectory(prompt=prompt, reducer=reducer, reducer_method=method)
     except Exception as exc:  # surfaced to UI
         st.error(f"Trajectory generation failed: {exc}")
         return
 
+    source_msg = reducer_meta.get("source", "in-memory fit")
     st.success(
         f"Projected {result.meta['n_points']} points "
-        f"({result.meta['seq_len']} tokens × {result.meta['n_layers']} layers)"
+        f"({result.meta['seq_len']} tokens × {result.meta['n_layers']} layers) "
+        f"using reducer: {source_msg}"
     )
 
     fig = _build_animated_figure(result.df, color_by=color_by)
@@ -141,6 +164,21 @@ def _fit_reducer(
         reducer.fit(X)
 
     return reducer, {"n_train": len(X), "d_model": X.shape[1], "layers": run.layers}
+
+
+@st.cache_resource(show_spinner=False)
+def _load_reducer(
+    projection_root: str,
+    projection_layer: int,
+    method: str,
+    run_root: str,
+    max_samples: int,
+):
+    model_path = Path(projection_root) / "models" / f"layer_{projection_layer:02d}_{method}.pkl"
+    if model_path.exists():
+        reducer = load_projection_model(model_path)
+        return reducer, {"source": str(model_path), "fit": "precomputed"}
+    return _fit_reducer(run_root, method=method, max_samples=max_samples)
 
 
 def _compute_trajectory(prompt: str, reducer: Any, reducer_method: str) -> TrajectoryResult:
