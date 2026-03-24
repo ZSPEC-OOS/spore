@@ -17,8 +17,8 @@ from .engine import LanguageLearningEngine
 class LearningInterface:
 
     def __init__(self) -> None:
-        self.engine:          LanguageLearningEngine = LanguageLearningEngine()
-        self.command_history: List[str]              = []
+        self.engine: LanguageLearningEngine = LanguageLearningEngine()
+        self.command_history: List[str] = []
 
     async def run(self) -> None:
         print(
@@ -30,7 +30,7 @@ Commands:
   learn <topic>    - Specialise in a specific topic
   stop             - Pause learning
   ask <question>   - Test knowledge
-  visualize        - Print SVG preview
+  visualize        - Show geometric dashboard launch/status
   status           - Check learning progress
   ai show          - Show AI model config (search/crawl only)
   ai config        - Configure AI model (name, model ID, base URL, API key)
@@ -40,7 +40,7 @@ Commands:
         )
 
         while True:
-            cmd   = input("\n> ").strip()
+            cmd = input("\n> ").strip()
             lower = cmd.lower()
             self.command_history.append(cmd)
 
@@ -70,18 +70,26 @@ Commands:
                 continue
 
             if lower == "visualize":
-                svg = self.engine.visualizer.generate_svg()
-                print(svg[:700] + "\n...")
+                ready = self.engine.visualizer.readiness()
+                print(
+                    "\n".join(
+                        [
+                            "📊 Geometric Activation Visualizer is the only supported visualizer.",
+                            f"Entry point: streamlit run {ready['entrypoint']}",
+                            f"Artifacts root: {ready['artifacts_root']}",
+                            f"Mind empty but ready: {ready['empty_but_ready']}",
+                        ]
+                    )
+                )
                 continue
 
             if lower == "status":
                 print(
                     f"""
-Phase:       {self.engine.phase.value}
-Memories:    {len(self.engine.memory)}
-Neurons:     {len(self.engine.visualizer.neurons)}
-Connections: {len(self.engine.visualizer.connections)}
-Topic:       {self.engine.topic or 'None'}
+Phase:            {self.engine.phase.value}
+Memories:         {len(self.engine.memory)}
+Tracked concepts: {len(self.engine.concept_frequency)}
+Topic:            {self.engine.topic or 'None'}
 """
                 )
                 continue
@@ -100,12 +108,12 @@ AI Model Configuration (Search/Crawl Only):
                 continue
 
             if lower == "ai config":
-                current  = self.engine.ai_config
+                current = self.engine.ai_config
                 print("Leave any field empty to keep the current value.")
-                name     = input(f"Model Name [{current.name}]: ").strip()                    or current.name
-                model_id = input(f"Model ID [{current.model_id or 'unset'}]: ").strip()       or current.model_id
-                base_url = input(f"Base URL [{current.base_url or 'unset'}]: ").strip()       or current.base_url
-                api_key  = input("API Key [hidden, press Enter to keep current]: ").strip()   or current.api_key
+                name = input(f"Model Name [{current.name}]: ").strip() or current.name
+                model_id = input(f"Model ID [{current.model_id or 'unset'}]: ").strip() or current.model_id
+                base_url = input(f"Base URL [{current.base_url or 'unset'}]: ").strip() or current.base_url
+                api_key = input("API Key [hidden, press Enter to keep current]: ").strip() or current.api_key
                 self.engine.configure_ai_model(name, model_id, base_url, api_key)
                 print("✅ AI model configuration updated.")
                 continue
@@ -121,7 +129,7 @@ AI Model Configuration (Search/Crawl Only):
             print(
                 "Unknown command. "
                 "Try: learn general | learn <topic> | ask <question> | "
-                "status | ai show | ai config | ai test | exit"
+                "visualize | status | ai show | ai config | ai test | exit"
             )
 
 
