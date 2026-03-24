@@ -1,0 +1,874 @@
+{
+  "number": 2,
+  "name": "Intermediate Fluency",
+  "description": "Stage 2",
+  "categories": [
+    {
+      "id": "cat_2_1",
+      "name": "Extended Syntax (Revisited)",
+      "description": "Syntax",
+      "questions": [
+        {
+          "id": "cat_2_1_q1",
+          "semantic_intent": "Describe what you see",
+          "canonical_form": "Describe what you see",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "I see [noun] [verb]-ing [preposition phrase]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "There's a [adjective] [noun] that [relative clause]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "In the foreground, [description]; in the background, [description]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "It appears to be [scene]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Hard to describe, but [attempt]",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Reminds me of [comparison]",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "The main thing is [focus]",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Everything looks [quality]",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Chaos, mostly",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Nothing of interest",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Describe what you see",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Describe what you see?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Describe what you see, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_1_q2",
+          "semantic_intent": "Explain how [process] works",
+          "canonical_form": "Explain how [process] works",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "First, [step 1]. Then, [step 2]. Finally, [step 3]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "It starts with [initiation], which leads to [development], resulting in [conclusion]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Through a series of [mechanism] operations",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "By combining [element A] and [element B]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Gradually, through [process]",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Instantaneously, via [mechanism]",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "In cycles of [pattern]",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Depends on [variable]",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Nobody really knows",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Magic, as far as I can tell",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Explain how [process] works",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Explain how [process] works?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Explain how [process] works, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_1_q3",
+          "semantic_intent": "What if [hypothetical]?",
+          "canonical_form": "What if [hypothetical]?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Then [consequence]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "It would [result]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Everything would change",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Nothing different",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "We'd have to [adaptation]",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "The [system] would collapse",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Paradise on earth",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Chaos ensues",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Interesting question—[speculation]",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Impossible to predict",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What if [hypothetical]?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What if [hypothetical]?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What if [hypothetical], please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cat_2_2",
+      "name": "Emotional & Mental States",
+      "description": "Emotion",
+      "questions": [
+        {
+          "id": "cat_2_2_q1",
+          "semantic_intent": "How do you feel?",
+          "canonical_form": "How do you feel?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Happy",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Sad",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Angry",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Anxious",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Excited",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Bored",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Confused",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Peaceful",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Overwhelmed",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Numb",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "How do you feel?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: How do you feel?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "How do you feel, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_2_q2",
+          "semantic_intent": "Why do you feel [emotion]?",
+          "canonical_form": "Why do you feel [emotion]?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Because of [event]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "No reason, just am",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "[Person] did [action]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Thinking about [topic]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Hormones probably",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "The weather",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Lack of sleep",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Too much caffeine",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Existential dread",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Actually, I don't",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Why do you feel [emotion]?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Why do you feel [emotion]?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Why do you feel [emotion], please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_2_q3",
+          "semantic_intent": "What are you thinking about?",
+          "canonical_form": "What are you thinking about?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "[Topic]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Nothing",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Too many things",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "One thing in particular",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "The past",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "The future",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "You, actually",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Something I can't share",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "How to answer this",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Why people ask this",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What are you thinking about?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What are you thinking about?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What are you thinking about, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cat_2_3",
+      "name": "Social Navigation",
+      "description": "Social",
+      "questions": [
+        {
+          "id": "cat_2_3_q1",
+          "semantic_intent": "What should I do about [problem]?",
+          "canonical_form": "What should I do about [problem]?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "You should [action]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Have you tried [solution]?",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Talk to [person]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Wait and see",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Take immediate action",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Let it go",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Consult a professional",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Trust your instincts",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "I can't advise on that",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Whatever feels right",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What should I do about [problem]?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What should I do about [problem]?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What should I do about [problem], please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_3_q2",
+          "semantic_intent": "Do you agree with [position]?",
+          "canonical_form": "Do you agree with [position]?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Completely",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Partially",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Not at all",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "I see both sides",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "I need more information",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "It's complicated",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "In principle, yes",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "In practice, no",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "I used to, but not anymore",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Can we agree to disagree?",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Do you agree with [position]?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Do you agree with [position]?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Do you agree with [position], please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_2_3_q3",
+          "semantic_intent": "What would you do in my situation?",
+          "canonical_form": "What would you do in my situation?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "I'd [action]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Probably panic first",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Stay calm and [plan]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Ask for help",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Handle it alone",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Make a list",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Sleep on it",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Follow my heart",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Calculate the odds",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Run away",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What would you do in my situation?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What would you do in my situation?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What would you do in my situation, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

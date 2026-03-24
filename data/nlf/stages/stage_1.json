@@ -1,0 +1,874 @@
+{
+  "number": 1,
+  "name": "Early Conceptual Language",
+  "description": "Stage 1",
+  "categories": [
+    {
+      "id": "cat_1_1",
+      "name": "Time Concepts (Basic)",
+      "description": "Temporal",
+      "questions": [
+        {
+          "id": "cat_1_1_q1",
+          "semantic_intent": "When did/will it happen?",
+          "canonical_form": "When did/will it happen?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Now",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Soon",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Later",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Yesterday",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Today",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Tomorrow",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Last [time unit]",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Next [time unit]",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "A while ago",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "In a [time unit]",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "When did/will it happen?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: When did/will it happen?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "When did/will it happen, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_1_q2",
+          "semantic_intent": "How long?",
+          "canonical_form": "How long?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Seconds",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Minutes",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Hours",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Days",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Weeks",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Months",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Years",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Ages",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "No time at all",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Forever",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "How long?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: How long?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "How long, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_1_q3",
+          "semantic_intent": "Is it morning/noon/night?",
+          "canonical_form": "Is it morning/noon/night?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Morning",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Afternoon",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Evening",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Night",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Dawn",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Dusk",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Midday",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Midnight",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "In between",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Hard to tell",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Is it morning/noon/night?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Is it morning/noon/night?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Is it morning/noon/night, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cat_1_2",
+      "name": "Quantity & Comparison",
+      "description": "Amounts",
+      "questions": [
+        {
+          "id": "cat_1_2_q1",
+          "semantic_intent": "How much/many?",
+          "canonical_form": "How much/many?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "None",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "A little",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Some",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "A lot",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Too much",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Not enough",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Plenty",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "[Specific number]",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "More than expected",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Less than I hoped",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "How much/many?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: How much/many?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "How much/many, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_2_q2",
+          "semantic_intent": "Which is bigger/smaller?",
+          "canonical_form": "Which is bigger/smaller?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "A is",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "B is",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "They're equal",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Hard to compare",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Depends how you measure",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "A, by far",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "B, slightly",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Neither is small",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Both are tiny",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Context matters",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Which is bigger/smaller?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Which is bigger/smaller?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Which is bigger/smaller, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_2_q3",
+          "semantic_intent": "Is there enough?",
+          "canonical_form": "Is there enough?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Yes, plenty",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "No, we need more",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Just barely",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "More than enough",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Running low",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Could always use extra",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "For now, yes",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Won't last long",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Depends who you ask",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Define 'enough'",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Is there enough?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Is there enough?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Is there enough, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cat_1_3",
+      "name": "Causality (Because/So)",
+      "description": "Cause/effect",
+      "questions": [
+        {
+          "id": "cat_1_3_q1",
+          "semantic_intent": "Why?",
+          "canonical_form": "Why?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Because [reason]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "[Reason], that's why",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "So that [outcome]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "In order to [goal]",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "No particular reason",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Long story",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Wouldn't you like to know",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Does it matter?",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "I wish I knew",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Ask someone else",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "Why?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: Why?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "Why, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_3_q2",
+          "semantic_intent": "What happened?",
+          "canonical_form": "What happened?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "[Event] occurred",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Nothing special",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Something unexpected",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "The usual",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "I don't want to talk about it",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "You won't believe it",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Small misunderstanding",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "Major breakthrough",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "Total disaster",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Miracle, honestly",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What happened?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What happened?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What happened, please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        },
+        {
+          "id": "cat_1_3_q3",
+          "semantic_intent": "What will happen if [condition]?",
+          "canonical_form": "What will happen if [condition]?",
+          "slots": [
+            {
+              "slot_number": 1,
+              "text": "Then [outcome]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 1"
+            },
+            {
+              "slot_number": 2,
+              "text": "Probably [outcome]",
+              "function": "direct",
+              "register": "neutral",
+              "use_case": "Slot 2"
+            },
+            {
+              "slot_number": 3,
+              "text": "Nothing",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 3"
+            },
+            {
+              "slot_number": 4,
+              "text": "Something bad",
+              "function": "elaborated",
+              "register": "formal",
+              "use_case": "Slot 4"
+            },
+            {
+              "slot_number": 5,
+              "text": "Something good",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 5"
+            },
+            {
+              "slot_number": 6,
+              "text": "Who knows?",
+              "function": "colloquial",
+              "register": "casual",
+              "use_case": "Slot 6"
+            },
+            {
+              "slot_number": 7,
+              "text": "Depends on [factor]",
+              "function": "deflection",
+              "register": "neutral",
+              "use_case": "Slot 7"
+            },
+            {
+              "slot_number": 8,
+              "text": "The opposite of what you expect",
+              "function": "meta",
+              "register": "neutral",
+              "use_case": "Slot 8"
+            },
+            {
+              "slot_number": 9,
+              "text": "A chain reaction",
+              "function": "playful",
+              "register": "playful",
+              "use_case": "Slot 9"
+            },
+            {
+              "slot_number": 10,
+              "text": "Let's find out",
+              "function": "limitation",
+              "register": "neutral",
+              "use_case": "Slot 10"
+            }
+          ],
+          "variants": [
+            {
+              "text": "What will happen if [condition]?",
+              "technique": "syntactic_alternation",
+              "register": "neutral"
+            },
+            {
+              "text": "Could you tell me: What will happen if [condition]?",
+              "technique": "contextual_embedding",
+              "register": "formal"
+            },
+            {
+              "text": "What will happen if [condition], please?",
+              "technique": "pragmatic_modulation",
+              "register": "casual"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
