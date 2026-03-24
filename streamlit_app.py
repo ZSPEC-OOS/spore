@@ -13,6 +13,7 @@ Tabs
 ----
   Tab 1: 🗺️ Latent Space   — UMAP/PCA scatter, layer slider, color-by, lasso
   Tab 2: 🔬 SAE Features   — per-feature histogram, top examples, logit lens
+  Tab 3: 🌐 Feature Map    — UMAP over all SAE decoder directions, click → jump
 """
 
 from __future__ import annotations
@@ -76,7 +77,11 @@ if cli.sae_ds and "_sae_ds" not in st.session_state:
     st.session_state["_sae_ds"] = cli.sae_ds
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_latent, tab_sae = st.tabs(["🗺️ Latent Space", "🔬 SAE Features"])
+tab_latent, tab_sae, tab_map = st.tabs([
+    "🗺️ Latent Space",
+    "🔬 SAE Features",
+    "🌐 Feature Map",
+])
 
 with tab_latent:
     from spore.app.latent_space import render_tab
@@ -85,3 +90,7 @@ with tab_latent:
 with tab_sae:
     from spore.app.sae_dashboard import render_tab as render_sae_tab
     render_sae_tab()
+
+with tab_map:
+    from spore.app.feature_map import render_tab as render_map_tab
+    render_map_tab()
