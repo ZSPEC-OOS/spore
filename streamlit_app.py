@@ -4,13 +4,15 @@ streamlit_app.py — SPORE Activation Visualiser entry point.
 Launch with:
     streamlit run streamlit_app.py
 
-Or with a non-default projections directory:
+Or with non-default directories pre-filled:
     streamlit run streamlit_app.py -- --proj projections/my_run
+    streamlit run streamlit_app.py -- --sae-ckpt sae_checkpoints/run/latest \\
+                                       --sae-ds sae_data/gpt2_l6
 
 Tabs
 ----
   Tab 1: 🗺️ Latent Space   — UMAP/PCA scatter, layer slider, color-by, lasso
-  (future tabs added here)
+  Tab 2: 🔬 SAE Features   — per-feature histogram, top examples, logit lens
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ st.set_page_config(
         "About": (
             "**SPORE Activation Visualiser**\n\n"
             "Geometric analysis of transformer residual-stream activations.\n\n"
-            "Collect → Reduce → Visualise."
+            "Collect → Reduce → Visualise → Interpret."
         ),
     },
 )
@@ -52,11 +54,15 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Parse any CLI args forwarded via `streamlit run app.py -- --proj ...` ─────
+# ── Parse any CLI args forwarded via `streamlit run app.py -- ...` ────────────
 def _parse_cli() -> argparse.Namespace:
     p = argparse.ArgumentParser(add_help=False)
-    p.add_argument("--proj", default=None,
-                   help="Default projections directory shown in the sidebar")
+    p.add_argument("--proj",    default=None,
+                   help="Default projections directory (Latent Space tab)")
+    p.add_argument("--sae-ckpt", default=None,
+                   help="Default SAE checkpoint path (SAE Features tab)")
+    p.add_argument("--sae-ds",   default=None,
+                   help="Default SAE dataset root (SAE Features tab)")
     args, _ = p.parse_known_args(sys.argv[1:])
     return args
 
@@ -64,10 +70,18 @@ def _parse_cli() -> argparse.Namespace:
 cli = _parse_cli()
 if cli.proj and "_ls_root" not in st.session_state:
     st.session_state["_ls_root"] = cli.proj
+if cli.sae_ckpt and "_sae_ckpt" not in st.session_state:
+    st.session_state["_sae_ckpt"] = cli.sae_ckpt
+if cli.sae_ds and "_sae_ds" not in st.session_state:
+    st.session_state["_sae_ds"] = cli.sae_ds
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_latent, = st.tabs(["🗺️ Latent Space"])
+tab_latent, tab_sae = st.tabs(["🗺️ Latent Space", "🔬 SAE Features"])
 
 with tab_latent:
     from spore.app.latent_space import render_tab
     render_tab()
+
+with tab_sae:
+    from spore.app.sae_dashboard import render_tab as render_sae_tab
+    render_sae_tab()

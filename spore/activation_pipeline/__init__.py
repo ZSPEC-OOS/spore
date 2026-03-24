@@ -38,6 +38,7 @@ from .reduction import (
     to_dataframe,
 )
 from .sae_dataset import SAEDataset, SAEDatasetConfig, SnippetResult
+from .sae import SAEConfig, SAEOutput, SparseAutoencoder, SAETrainer
 
 __all__ = [
     # collection
@@ -58,4 +59,9 @@ __all__ = [
     "SAEDataset",
     "SAEDatasetConfig",
     "SnippetResult",
+    # SAE model + training
+    "SAEConfig",
+    "SAEOutput",
+    "SparseAutoencoder",
+    "SAETrainer",
 ]
