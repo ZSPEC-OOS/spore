@@ -368,6 +368,57 @@ def _main_panel(ctrl: Dict[str, Any]) -> None:
             unsafe_allow_html=True,
         )
 
+    # ── Above-plot controls row ───────────────────────────────────────────────
+    ap_col1, ap_col2, ap_col3, ap_col4 = st.columns([2, 2, 3, 3])
+    with ap_col1:
+        # Quick projection method toggle mirrored from sidebar
+        quick_method = st.radio(
+            "Projection",
+            options=store.available_methods(),
+            format_func=str.upper,
+            horizontal=True,
+            index=store.available_methods().index(method) if method in store.available_methods() else 0,
+            key="_ls_quick_method",
+            label_visibility="collapsed",
+        )
+        if quick_method != method:
+            method = quick_method
+            layers = store.available_layers(method)
+            layer_sel = [layers[0]]
+    with ap_col2:
+        # Re-render color-by picker inline for quick access
+        _co_opts = color_column_options(df) if df is not None else ["layer"]
+        quick_color = st.selectbox(
+            "Color by",
+            options=_co_opts,
+            index=_co_opts.index(color_col) if color_col in _co_opts else 0,
+            key="_ls_quick_color",
+            label_visibility="collapsed",
+        )
+        if quick_color != color_col:
+            color_col = quick_color
+    with ap_col3:
+        if view_mode == "Animate" or len(store.available_layers(method)) > 1:
+            all_layers = store.available_layers(method)
+            if len(all_layers) > 1:
+                anim_layer = st.select_slider(
+                    "Checkpoint layer",
+                    options=all_layers,
+                    value=layer_sel[0] if layer_sel else all_layers[0],
+                    key="_ls_anim_slider",
+                    label_visibility="collapsed",
+                )
+                if view_mode == "Single":
+                    layer_sel = [anim_layer]
+        else:
+            st.caption(f"Layer {layer_sel[0] if layer_sel else '—'}")
+    with ap_col4:
+        st.caption(
+            f"**{method.upper()}** · {len(df):,} pts · "
+            f"{'3D' if ctrl['three_d'] else '2D'} · "
+            f"{'Animate' if view_mode == 'Animate' else view_mode}"
+        )
+
     # ── Build figure ─────────────────────────────────────────────────────────
     cfg = ScatterConfig(
         color_col   = color_col,
@@ -499,10 +550,28 @@ def _render_selection_panel(df: pd.DataFrame, selected_pts: list) -> None:
 
 
 def _render_onboarding() -> None:
-    st.markdown("## 🧠 SPORE Latent Space Explorer")
+    st.markdown("## 🗺️ Latent Space Explorer")
+    st.markdown(
+        "_Select a layer and checkpoint to project activations into 2-D/3-D space._"
+    )
+
+    # Skeleton-style placeholder cards
+    sk1, sk2, sk3 = st.columns(3)
+    for sk, label in zip(
+        [sk1, sk2, sk3],
+        ["Projection scatter will appear here", "PCA variance panel", "Selection panel"],
+    ):
+        sk.markdown(
+            f'<div style="background:#161b22;border:1px dashed #30363d;border-radius:8px;'
+            f'padding:2.5rem 1rem;text-align:center;color:#484f58;font-size:0.82rem">'
+            f"{label}</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("---")
     st.info(
-        "**No projection data found.**\n\n"
-        "Follow these steps to get started:\n\n"
+        "**No projection data found** — set the **Projections directory** in the "
+        "sidebar, or run the pipeline first:\n\n"
         "```bash\n"
         "# Step 1 — collect activations\n"
         "python collect_activations.py \\\n"
@@ -510,8 +579,7 @@ def _render_onboarding() -> None:
         "    --out activations/run\n\n"
         "# Step 2 — compute UMAP + PCA projections\n"
         "python reduce_activations.py \\\n"
-        "    --src activations/run \\\n"
-        "    --method both --layers all \\\n"
+        "    --src activations/run --method both --layers all \\\n"
         "    --out projections/run\n\n"
         "# Step 3 — launch this dashboard\n"
         "streamlit run streamlit_app.py\n"
