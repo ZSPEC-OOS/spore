@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPORE Unified AI Console</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #060913;
+      --surface: #0d1426;
+      --surface-2: #111c34;
+      --line: #2b3b63;
+      --txt: #d7e5ff;
+      --muted: #94a8d2;
+      --cyan: #4ce9ff;
+      --amber: #ffc857;
+      --green: #38f9a6;
+      --red: #ff7d7d;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--txt);
+      background: radial-gradient(circle at top, #102042 0, #080d1b 50%, #060913 100%);
+      min-height: 100vh;
+    }
+
+    .wrap { width: min(1180px, 94vw); margin: 0 auto; padding: 26px 0 36px; }
+
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(160deg, #132446dd, #0a1020dd 70%);
+      padding: 24px;
+      box-shadow: 0 14px 42px #00000066;
+      margin-bottom: 18px;
+    }
+
+    h1 { margin: 0; color: var(--cyan); font-size: clamp(1.4rem, 2vw, 2rem); }
+    p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+
+    .quick {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--txt);
+      border-radius: 10px;
+      padding: 9px 12px;
+      text-decoration: none;
+      font-size: 0.92rem;
+      cursor: pointer;
+    }
+    .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .btn.primary { background: #18315f; border-color: #2f5daa; }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(12, 1fr);
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, var(--surface), #0b1326);
+      padding: 16px;
+    }
+    .card h2 { margin: 0 0 8px; font-size: 1.04rem; color: var(--amber); }
+    .card h3 { margin: 2px 0 8px; font-size: 0.92rem; color: var(--cyan); }
+    .card p { margin: 0 0 10px; font-size: 0.92rem; }
+
+    .card.visualizer { grid-column: span 7; }
+    .card.framework { grid-column: span 5; }
+    .card.training { grid-column: span 7; }
+    .card.stagefiles { grid-column: span 5; }
+
+    @media (max-width: 920px) {
+      .card.visualizer,
+      .card.framework,
+      .card.training,
+      .card.stagefiles { grid-column: span 12; }
+    }
+
+    .status { font-size: 0.86rem; color: var(--muted); margin-top: 8px; min-height: 18px; }
+    .status.ok { color: var(--green); }
+    .status.err { color: var(--red); }
+
+    .kpi {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 10px 0 12px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.77rem;
+      color: var(--muted);
+    }
+
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .input, textarea, select {
+      width: 100%;
+      background: #081020;
+      color: var(--txt);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      font: inherit;
+      resize: vertical;
+    }
+    textarea { min-height: 120px; }
+
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 0.78rem; margin-bottom: 4px; color: var(--muted); }
+
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .list {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .list button {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: #0c1730;
+      color: var(--txt);
+      padding: 9px 10px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .list button:last-child { border-bottom: 0; }
+    .list button:hover { background: #132346; }
+
+    pre {
+      margin: 8px 0 0;
+      background: #050b18;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      max-height: 250px;
+      overflow: auto;
+      font-size: 0.76rem;
+      line-height: 1.4;
+      color: #d4e5ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>SPORE — Unified AI Console</h1>
+      <p>
+        One page connecting the visualizer workflow, AI framework, and training system.
+        This keeps model connectivity, local brain state, and training stage JSON access in one operational home.
+      </p>
+      <div class="quick">
+        <a class="btn primary" href="/training.html">Open Full Training Workspace</a>
+        <button class="btn" onclick="refreshAll()">Refresh all links</button>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card visualizer">
+        <h2>Visualizer + Framework Link</h2>
+        <p>
+          Use this as the orchestration point: visual reasoning in the dashboard, AI generation in the framework,
+          and direct access to training cycles.
+        </p>
+        <div class="kpi" id="nlf-kpi"></div>
+        <div class="row">
+          <a class="btn" href="/training.html">Training + stage browser</a>
+          <a class="btn" href="/static/index.html">Legacy visualizer note</a>
+        </div>
+        <div id="mastery-status" class="status">Loading framework status…</div>
+      </article>
+
+      <article class="card framework">
+        <h2>AI Framework Connection</h2>
+        <p>Connect and probe your outside model. Your saved config remains local and API-compatible.</p>
+
+        <div class="two">
+          <div class="field">
+            <label>Model ID</label>
+            <input id="model-id" class="input" placeholder="your-model" />
+          </div>
+          <div class="field">
+            <label>Base URL</label>
+            <input id="base-url" class="input" placeholder="https://api.provider.com/v1" />
+          </div>
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <input id="api-key" class="input" placeholder="optional" type="password" />
+        </div>
+        <div class="row">
+          <button class="btn" onclick="saveConfig()">Save connection</button>
+          <button class="btn" onclick="probeModel()">Probe model</button>
+        </div>
+        <div id="cfg-status" class="status"></div>
+      </article>
+
+      <article class="card training">
+        <h2>AI-to-AI Training Link</h2>
+        <p>
+          Trigger generation and tie responses to the training framework. This page does not rely on crawling;
+          it is model-to-model interaction plus stage-driven reinforcement.
+        </p>
+        <div class="field">
+          <label>Prompt</label>
+          <textarea id="prompt" placeholder="Ask SPORE to generate candidate responses..."></textarea>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label>Number of candidates</label>
+            <input id="num-candidates" class="input" type="number" min="1" max="8" value="4" />
+          </div>
+          <div class="field">
+            <label>Selection policy</label>
+            <select id="selection-policy">
+              <option value="argmax">argmax</option>
+              <option value="weighted">weighted</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" onclick="generateResponse()">Generate with framework</button>
+        </div>
+        <div id="gen-status" class="status"></div>
+        <pre id="gen-output">No generation run yet.</pre>
+      </article>
+
+      <article class="card stagefiles">
+        <h2>Training JSON Stage Files</h2>
+        <p>Raw stage JSON files are listed here so they are directly accessible from the UI layer.</p>
+        <div id="files-status" class="status">Loading stage files…</div>
+        <div id="files-list" class="list"></div>
+        <pre id="file-output">Select a file to preview JSON.</pre>
+      </article>
+    </section>
+  </div>
+
+  <script>
+    async function refreshAll() {
+      await Promise.all([loadConfig(), loadMastery(), loadStageFiles()]);
+    }
+
+    async function loadConfig() {
+      const status = document.getElementById('cfg-status');
+      try {
+        const r = await fetch('/api/config');
+        if (!r.ok) throw new Error('Could not load config');
+        const data = await r.json();
+        document.getElementById('model-id').value = data.model || '';
+        document.getElementById('base-url').value = data.baseUrl || '';
+        status.className = 'status ok';
+        status.textContent = 'Loaded saved AI config.';
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Config load failed: ' + e.message;
+      }
+    }
+
+    async function saveConfig() {
+      const status = document.getElementById('cfg-status');
+      const payload = {
+        name: 'SPORE External Model',
+        model_id: document.getElementById('model-id').value.trim(),
+        base_url: document.getElementById('base-url').value.trim(),
+        api_key: document.getElementById('api-key').value.trim(),
+      };
+      try {
+        const r = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Save failed');
+        status.className = 'status ok';
+        status.textContent = 'Connection saved. Firebase/browser sync remains compatible with this API.';
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Save failed: ' + e.message;
+      }
+    }
+
+    async function probeModel() {
+      const status = document.getElementById('cfg-status');
+      const payload = {
+        model_id: document.getElementById('model-id').value.trim(),
+        base_url: document.getElementById('base-url').value.trim(),
+        api_key: document.getElementById('api-key').value.trim(),
+      };
+      try {
+        const r = await fetch('/api/test/ai/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        status.className = data.ok ? 'status ok' : 'status err';
+        status.textContent = data.message || 'Probe completed.';
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Probe failed: ' + e.message;
+      }
+    }
+
+    async function loadMastery() {
+      const status = document.getElementById('mastery-status');
+      const kpi = document.getElementById('nlf-kpi');
+      kpi.innerHTML = '';
+      try {
+        const r = await fetch('/api/nlf/mastery');
+        if (!r.ok) throw new Error('Mastery API unavailable');
+        const data = await r.json();
+        const stages = Object.values(data || {});
+        const categories = stages.flatMap((s) => s.categories || []);
+        const mastered = categories.filter((c) => c.mastered).length;
+
+        const chips = [
+          `Stages: ${stages.length}`,
+          `Categories: ${categories.length}`,
+          `Mastered: ${mastered}`,
+        ];
+        for (const text of chips) {
+          const span = document.createElement('span');
+          span.className = 'chip';
+          span.textContent = text;
+          kpi.appendChild(span);
+        }
+
+        status.className = 'status ok';
+        status.textContent = 'Framework and training graph linked.';
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Framework status failed: ' + e.message;
+      }
+    }
+
+    async function generateResponse() {
+      const status = document.getElementById('gen-status');
+      const output = document.getElementById('gen-output');
+      const query = document.getElementById('prompt').value.trim();
+      if (!query) {
+        status.className = 'status err';
+        status.textContent = 'Prompt is required.';
+        return;
+      }
+      const payload = {
+        query,
+        num_candidates: parseInt(document.getElementById('num-candidates').value || '4', 10),
+        selection_policy: document.getElementById('selection-policy').value,
+      };
+      status.className = 'status';
+      status.textContent = 'Generating...';
+      try {
+        const r = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Generation failed');
+        output.textContent = JSON.stringify(data, null, 2);
+        status.className = 'status ok';
+        status.textContent = 'Generation complete. Use training workspace for cycle execution.';
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Generate failed: ' + e.message;
+      }
+    }
+
+    async function loadStageFiles() {
+      const status = document.getElementById('files-status');
+      const list = document.getElementById('files-list');
+      list.innerHTML = '';
+      try {
+        const r = await fetch('/api/nlf/stage-files');
+        if (!r.ok) throw new Error('Could not list stage files');
+        const data = await r.json();
+        const files = data.files || [];
+        if (!files.length) {
+          status.className = 'status';
+          status.textContent = 'No JSON stage files found in data/nlf/stages yet.';
+          return;
+        }
+
+        status.className = 'status ok';
+        status.textContent = `Found ${files.length} stage JSON file(s).`;
+
+        for (const file of files) {
+          const btn = document.createElement('button');
+          btn.textContent = `${file.name} (${file.size_bytes} bytes)`;
+          btn.onclick = () => previewFile(file.name);
+          list.appendChild(btn);
+        }
+      } catch (e) {
+        status.className = 'status err';
+        status.textContent = 'Stage file list failed: ' + e.message;
+      }
+    }
+
+    async function previewFile(name) {
+      const out = document.getElementById('file-output');
+      out.textContent = 'Loading ' + name + '...';
+      try {
+        const r = await fetch('/api/nlf/stage-files/' + encodeURIComponent(name));
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Could not load stage file');
+        out.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        out.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    refreshAll();
+  </script>
+</body>
+</html>
