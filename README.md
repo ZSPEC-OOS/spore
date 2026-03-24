@@ -104,3 +104,44 @@ pytest
 pip install duckduckgo-search   # real DDG search (falls back to mock)
 pip install openai               # real AI model calls
 ```
+
+## Unified Streamlit interpretability dashboard
+
+Run the full 4-page dashboard:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+Pages:
+- **Page 1 — Latent Space Projections**: UMAP/PCA projection explorer with layer animation.
+- **Page 2 — SAE Feature Explorer**: feature histogram, top examples, and SAE logit effects.
+- **Page 3 — Prompt Trajectory**: prompt token trajectories projected through PCA/UMAP.
+- **Page 4 — Attention & Logit Lens**: per-head/layer attention heatmaps + rollout and per-layer logit-lens top-k predictions.
+
+Sidebar controls include:
+- model selection
+- layer choice
+- dataset subset size
+- refresh button (clears Streamlit caches)
+- basic checkpoint comparison dropdown
+
+### Checkpoint comparison layout
+
+For epoch/checkpoint switching, point **Artifacts root** to a directory like:
+
+```text
+artifacts/
+  epoch_0001/
+    projections/
+    activations/
+    sae_checkpoints/latest/
+    sae_data/
+  epoch_0002/
+    projections/
+    activations/
+    sae_checkpoints/latest/
+    sae_data/
+```
+
+Selecting an epoch and pressing **Apply checkpoint** updates default paths used across pages.

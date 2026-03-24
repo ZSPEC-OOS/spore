@@ -89,11 +89,13 @@ _CSS = """
 # Entry point
 # ---------------------------------------------------------------------------
 
-def render_tab() -> None:
+def render_tab(include_prompt_trajectory: bool = False, default_activations_root: str | None = None) -> None:
     """Render the full Latent Space tab (sidebar + main area)."""
     st.markdown(_CSS, unsafe_allow_html=True)
 
     controls = _sidebar_controls()
+    controls["include_prompt_trajectory"] = include_prompt_trajectory
+    controls["default_activations_root"] = default_activations_root
     _main_panel(controls)
 
 
@@ -411,10 +413,14 @@ def _main_panel(ctrl: Dict[str, Any]) -> None:
     if selected_pts:
         _render_selection_panel(df, selected_pts)
 
-    # ── Corpus preview ───────────────────────────────────────────────────────
-    # ── Prompt trajectory viewer ─────────────────────────────────────────────
-    render_prompt_trajectory_viewer(default_root=str(Path("activations/run").resolve()))
+    # ── Optional prompt trajectory viewer ───────────────────────────────────
+    if ctrl.get("include_prompt_trajectory", False):
+        render_prompt_trajectory_viewer(
+            default_root=ctrl.get("default_activations_root")
+            or str(Path("activations/run").resolve())
+        )
 
+    # ── Corpus preview ───────────────────────────────────────────────────────
     with st.expander("📄 Corpus preview (first 50 rows)", expanded=False):
         preview_cols = [c for c in ["index", "text", "label", "activation_norm", "layer"]
                         if c in df.columns]
