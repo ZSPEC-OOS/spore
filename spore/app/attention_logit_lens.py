@@ -32,28 +32,30 @@ def render_tab(
     layer_default: int | None = None,
     top_k_default: int = 8,
 ) -> None:
-    st.markdown("### 👀 Attention Rollout + 🔭 Logit Lens")
+    st.markdown("### 👁️ Supporting Maps")
     st.caption(
-        "Prompt-level attention visualizations and intermediate residual projections "
-        "into vocabulary space (logit lens)."
+        "Prompt-level attention rollout heatmaps and intermediate residual "
+        "projections into vocabulary space (logit lens)."
     )
 
-    col1, col2 = st.columns([2, 1])
-    with col1:
+    # ── Shared prompt / model controls ───────────────────────────────────────
+    ctrl_col, prompt_col = st.columns([1, 2])
+    with ctrl_col:
+        top_k = st.slider("Top-k tokens", min_value=3, max_value=20, value=top_k_default,
+                          key="_sm_topk")
+        token_mode = st.radio("Token position", ["Last token", "Custom index"], index=0,
+                              key="_sm_tok_mode")
+    with prompt_col:
         prompt = st.text_area(
             "Prompt",
-            value=st.session_state.get(
-                "_attn_prompt",
-                "The quick brown fox jumps over the lazy dog.",
-            ),
+            value=st.session_state.get("_attn_prompt",
+                                       "The quick brown fox jumps over the lazy dog."),
             height=100,
             key="_attn_prompt",
         )
-    with col2:
-        top_k = st.slider("Top-k tokens", min_value=3, max_value=20, value=top_k_default)
-        token_mode = st.radio("Token position", ["Last token", "Custom index"], index=0)
 
-    if not st.button("Run Attention + Logit Lens", type="primary", use_container_width=True):
+    if not st.button("Run Analysis", type="primary", use_container_width=True,
+                     key="_sm_run_btn"):
         return
 
     if not prompt.strip():
@@ -73,10 +75,8 @@ def render_tab(
     if token_mode == "Custom index":
         tok_idx = st.number_input(
             "Token index",
-            min_value=0,
-            max_value=max(seq_len - 1, 0),
-            value=max(seq_len - 1, 0),
-            step=1,
+            min_value=0, max_value=max(seq_len - 1, 0),
+            value=max(seq_len - 1, 0), step=1,
             key="_attn_tok_idx",
         )
         token_index = int(tok_idx)
@@ -86,96 +86,140 @@ def render_tab(
     try:
         _, cache = model.run_with_cache(
             toks,
-            names_filter=lambda n: n.endswith("hook_attn_scores") or n.endswith("hook_resid_post"),
+            names_filter=lambda n: (
+                n.endswith("hook_attn_scores") or n.endswith("hook_resid_post")
+            ),
             return_type=None,
         )
+    except Exception as exc:
+        st.error(f"Model forward pass failed: {exc}")
+        return
 
-        # Need probabilities; compute from scores for robustness across TL versions.
-        attn_probs = _extract_attention_probs(cache, model.cfg.n_layers)
-        if attn_probs is None:
-            st.warning("No attention probabilities found in cache for this model/version.")
-            return
+    attn_probs = _extract_attention_probs(cache, model.cfg.n_layers)
+    if attn_probs is None:
+        st.warning("No attention probabilities found in cache.")
+        return
 
-        layer_count, head_count, _, _ = attn_probs.shape
-        layer_sel = st.slider(
-            "Layer", 0, layer_count - 1,
-            value=min(layer_default if layer_default is not None else layer_count - 1, layer_count - 1),
-            key="_attn_layer_slider",
+    layer_count, head_count, _, _ = attn_probs.shape
+
+    # ── Sub-tabs ──────────────────────────────────────────────────────────────
+    sub_attn, sub_lens = st.tabs(["🔥 Attention Rollout Heatmap", "🔭 Logit Lens"])
+
+    # ── Sub-tab 1: Attention Rollout Heatmap ──────────────────────────────────
+    with sub_attn:
+        st.caption(
+            "Head-level attention matrix and cumulative rollout up to a chosen layer."
         )
-        head_sel = st.slider("Head", 0, head_count - 1, value=0, key="_attn_head_slider")
 
-        st.markdown("#### Attention heatmaps")
-        c1, c2 = st.columns(2)
-        with c1:
+        acol1, acol2 = st.columns(2)
+        with acol1:
+            layer_sel = st.slider(
+                "Layer",
+                0, layer_count - 1,
+                value=min(
+                    layer_default if layer_default is not None else layer_count - 1,
+                    layer_count - 1,
+                ),
+                key="_attn_layer_slider",
+            )
+        with acol2:
+            head_sel = st.slider("Head", 0, head_count - 1, value=0,
+                                 key="_attn_head_slider")
+
+        # Axis labels: truncate long tokens
+        _labels = [t[:12] for t in token_text]
+
+        hcol1, hcol2 = st.columns(2)
+        with hcol1:
             head_mat = attn_probs[layer_sel, head_sel]
             fig_head = px.imshow(
                 head_mat,
                 color_continuous_scale="Viridis",
-                labels={"x": "Source token", "y": "Destination token", "color": "Attention"},
+                labels={"x": "Source", "y": "Destination", "color": "Attention"},
+                x=_labels, y=_labels,
                 title=f"Layer {layer_sel} · Head {head_sel}",
                 aspect="auto",
             )
-            fig_head.update_layout(template="plotly_dark", height=420)
+            fig_head.update_layout(template="plotly_dark", height=440)
             st.plotly_chart(fig_head, use_container_width=True)
 
-        with c2:
+        with hcol2:
             rollout = _attention_rollout(attn_probs)
             rollout_mat = rollout[layer_sel]
             fig_roll = px.imshow(
                 rollout_mat,
                 color_continuous_scale="Plasma",
-                labels={"x": "Source token", "y": "Destination token", "color": "Rollout"},
-                title=f"Attention rollout up to layer {layer_sel}",
+                labels={"x": "Source", "y": "Destination", "color": "Rollout"},
+                x=_labels, y=_labels,
+                title=f"Attention rollout — layer {layer_sel}",
                 aspect="auto",
             )
-            fig_roll.update_layout(template="plotly_dark", height=420)
+            fig_roll.update_layout(template="plotly_dark", height=440)
             st.plotly_chart(fig_roll, use_container_width=True)
 
         with st.expander("Token legend"):
             st.dataframe(
-                pd.DataFrame({"token_index": list(range(seq_len)), "token": token_text}),
-                use_container_width=True,
-                hide_index=True,
+                pd.DataFrame({"index": list(range(seq_len)), "token": token_text}),
+                use_container_width=True, hide_index=True,
             )
 
-        st.markdown("#### Logit lens across layers")
-        lens_df = _compute_logit_lens_table(model, cache, token_index=token_index, top_k=top_k)
+    # ── Sub-tab 2: Logit Lens ─────────────────────────────────────────────────
+    with sub_lens:
+        st.caption(
+            "Per-layer top-k vocabulary predictions obtained by applying the "
+            "unembedding matrix to each residual-stream state."
+        )
+
+        try:
+            lens_df = _compute_logit_lens_table(
+                model, cache, token_index=token_index, top_k=top_k
+            )
+        except Exception as exc:
+            st.error(f"Logit lens computation failed: {exc}")
+            return
+
         if lens_df.empty:
             st.info("No logit-lens rows available.")
             return
 
         layer_view = st.selectbox(
-            "Layer view", ["Table (all layers)", "Bar chart (single layer)"], index=0
+            "View mode",
+            ["Table — all layers", "Bar chart — single layer"],
+            index=0,
+            key="_sm_lens_view",
         )
 
         if layer_view.startswith("Table"):
-            st.dataframe(lens_df, use_container_width=True, height=440, hide_index=True)
+            st.dataframe(lens_df, use_container_width=True, height=460, hide_index=True)
         else:
-            layer_pick = st.slider("Bar chart layer", 0, int(lens_df["layer"].max()), value=int(lens_df["layer"].max()))
-            sub = lens_df[(lens_df["layer"] == layer_pick)].sort_values("logit", ascending=False)
-            fig = go.Figure(
+            layer_pick = st.slider(
+                "Layer",
+                0, int(lens_df["layer"].max()),
+                value=int(lens_df["layer"].max()),
+                key="_sm_lens_layer",
+            )
+            sub = lens_df[lens_df["layer"] == layer_pick].sort_values(
+                "logit", ascending=False
+            )
+            bar_fig = go.Figure(
                 go.Bar(
-                    x=sub["token"],
-                    y=sub["logit"],
+                    x=sub["token"], y=sub["logit"],
                     marker_color="#58a6ff",
                     hovertemplate="%{x}: %{y:.3f}<extra></extra>",
                 )
             )
-            fig.update_layout(
-                template="plotly_dark",
-                height=360,
-                xaxis_title="Token",
-                yaxis_title="Projected logit",
-                title=f"Top-{top_k} predictions @ layer {layer_pick}, token index {token_index}",
+            bar_fig.update_layout(
+                template="plotly_dark", height=380,
+                xaxis_title="Token", yaxis_title="Projected logit",
+                title=f"Top-{top_k} predictions · layer {layer_pick} · "
+                      f"token index {token_index}",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(bar_fig, use_container_width=True)
 
         st.caption(
-            "Logit lens computed as unembed(ln_final(resid_post[layer, token_idx])) with TransformerLens weights."
+            "Logit lens: `unembed(ln_final(resid_post[layer, token_idx]))` "
+            "via TransformerLens weights."
         )
-
-    except Exception as exc:
-        st.error(f"Attention/logit-lens computation failed: {exc}")
 
 
 def _extract_attention_probs(cache: Any, n_layers: int) -> np.ndarray | None:

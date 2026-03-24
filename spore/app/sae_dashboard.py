@@ -464,12 +464,13 @@ def _sidebar_section(title: str) -> None:
 
 def render_tab() -> None:
     """
-    Render the SAE Feature Dashboard tab.
-    Called from the Streamlit entry point inside a ``with tab_sae:`` block.
+    Render the Feature Dictionary tab (SAE Feature Explorer).
+    Layout: sidebar (SAE paths + logit lens) | left panel (navigation) |
+            main panel (examples + distribution) | right panel (feature UMAP).
     """
     st.markdown(_CSS, unsafe_allow_html=True)
 
-    # ── Sidebar ──────────────────────────────────────────────────────────────
+    # ── Sidebar: SAE paths ────────────────────────────────────────────────────
     with st.sidebar:
         _sidebar_section("📂 SAE DATA")
 
@@ -477,121 +478,45 @@ def render_tab() -> None:
             "SAE Checkpoint",
             value=st.session_state.get(_K_CKPT, ""),
             key=_K_CKPT,
-            help="Path to a step_XXXXXXX/ directory (or the `latest/` symlink) "
-                 "produced by train_sae.py",
+            help="Path to a step_XXXXXXX/ directory produced by train_sae.py",
             placeholder="sae_checkpoints/run/latest",
         )
-
         dataset_root = st.text_input(
             "Dataset Root",
             value=st.session_state.get(_K_DS, ""),
             key=_K_DS,
-            help="Root directory of a SAEDataset (built with build_sae_dataset.py)",
+            help="Root directory of a SAEDataset (build_sae_dataset.py)",
             placeholder="sae_data/gpt2_l6",
         )
 
-        # ── Read metadata without loading tensors ─────────────────────
-        ds_meta   = _read_dataset_meta(dataset_root)  if dataset_root  else None
-        ckpt_meta = _read_ckpt_meta(ckpt_path)        if ckpt_path     else None
+        ds_meta   = _read_dataset_meta(dataset_root) if dataset_root  else None
+        ckpt_meta = _read_ckpt_meta(ckpt_path)       if ckpt_path     else None
 
         available_layers = ds_meta["layers"] if ds_meta else [0]
-        layer = st.selectbox(
-            "Layer",
-            options=available_layers,
-            index=0,
-            key=_K_LAYER,
-        )
+        layer = st.selectbox("Layer", options=available_layers, index=0, key=_K_LAYER)
 
-        # Show quick info if metadata loaded
         if ds_meta:
             n_tokens = ds_meta.get("total_tokens", "?")
-            n_tok_fmt = f"{n_tokens:,}" if isinstance(n_tokens, int) else str(n_tokens)
             st.caption(
                 f"model: `{ds_meta.get('model_name','?')}` · "
                 f"d_model: `{ds_meta.get('d_model','?')}` · "
-                f"tokens: `{n_tok_fmt}`"
+                f"tokens: `{n_tokens:,}` " if isinstance(n_tokens, int)
+                else f"tokens: `{n_tokens}`"
             )
         if ckpt_meta:
             cfg_d = ckpt_meta.get("cfg", {})
             st.caption(
-                f"SAE: `{cfg_d.get('n_features','?')}` features · "
+                f"SAE: `{cfg_d.get('n_features','?')}` feats · "
                 f"`{cfg_d.get('activation','?')}` · "
                 f"step `{ckpt_meta.get('step','?')}`"
             )
 
-        # ── Feature controls (need n_features) ────────────────────────
-        _sidebar_section("🔎 FEATURE")
-
-        n_features = (
-            ckpt_meta["cfg"]["n_features"]
-            if ckpt_meta and "cfg" in ckpt_meta
-            else 8192
-        )
-
-        # Number input + slider, kept in sync via session state
-        feat_input = st.number_input(
-            "Feature Index",
-            min_value=0,
-            max_value=n_features - 1,
-            value=int(st.session_state.get(_K_FEAT, 0)),
-            step=1,
-            key=_K_FEAT,
-            help=f"0 – {n_features - 1}",
-        )
-
-        feat_slider = st.slider(
-            "Browse",
-            min_value=0,
-            max_value=n_features - 1,
-            value=int(feat_input),
-            key=_K_FEAT_SL,
-            label_visibility="collapsed",
-        )
-
-        # Slider takes precedence if moved; number input if typed
-        feat_idx = (
-            feat_slider
-            if feat_slider != int(st.session_state.get(_K_FEAT, 0))
-            else int(feat_input)
-        )
-
-        top_k = st.slider(
-            "Top N Examples",
-            min_value=5,
-            max_value=50,
-            value=int(st.session_state.get(_K_TOPK, 20)),
-            step=5,
-            key=_K_TOPK,
-        )
-
-        threshold = st.slider(
-            "Activation Threshold",
-            min_value=0.0,
-            max_value=5.0,
-            value=float(st.session_state.get(_K_THRESH, 0.0)),
-            step=0.05,
-            key=_K_THRESH,
-            help="Only show tokens with h[feat] > threshold",
-        )
-
-        context_tokens = st.slider(
-            "Context Window (tokens)",
-            min_value=2,
-            max_value=20,
-            value=int(st.session_state.get(_K_CTX, 8)),
-            step=2,
-            key=_K_CTX,
-        )
-
-        # ── Logit lens ────────────────────────────────────────────────
         _sidebar_section("🔭 LOGIT LENS")
-
         use_logit = st.checkbox(
             "Enable logit lens",
             value=bool(st.session_state.get(_K_LOGIT, False)),
             key=_K_LOGIT,
-            help="Load the transformer model to compute W_dec @ W_U, showing "
-                 "which output tokens this feature promotes or suppresses.",
+            help="Compute W_dec @ W_U to show promoted/suppressed tokens.",
         )
         model_name = st.text_input(
             "Model Name",
@@ -601,152 +526,372 @@ def render_tab() -> None:
             help="TransformerLens model name (e.g. gpt2, pythia-160m)",
         )
 
-    # ── Main area ─────────────────────────────────────────────────────────────
-
+    # ── Empty state ───────────────────────────────────────────────────────────
     if not ckpt_path or not dataset_root:
-        st.markdown(
-            "## 🔬 SAE Feature Dashboard\n\n"
-            "Set the **SAE Checkpoint** and **Dataset Root** paths in the sidebar "
-            "to begin exploring features.\n\n"
-            "---\n"
+        st.markdown("## 🔬 Feature Dictionary")
+        st.info(
+            "Set **SAE Checkpoint** and **Dataset Root** in the sidebar.\n\n"
             "**Workflow:**\n"
-            "1. Build a dataset: `python build_sae_dataset.py …`\n"
-            "2. Train an SAE:    `python train_sae.py …`\n"
-            "3. Enter the paths above and pick a feature to inspect.\n"
+            "1. `python build_sae_dataset.py …`\n"
+            "2. `python train_sae.py …`\n"
+            "3. Enter the paths above and pick a feature to inspect."
         )
         return
 
-    # ── Load analyzer ─────────────────────────────────────────────────────────
+    # ── Load SAE (warm cache) ─────────────────────────────────────────────────
     try:
-        _load_analyzer(ckpt_path, dataset_root, layer)   # warms the cache
+        _load_analyzer(ckpt_path, dataset_root, layer)
     except Exception as exc:
         st.error(
-            f"**Failed to load SAE.**\n\n"
-            f"Check that `{ckpt_path}` is a valid step_XXXXXXX/ checkpoint "
-            f"and `{dataset_root}` is a valid SAEDataset root.\n\n"
-            f"Error: `{exc}`"
+            f"**Failed to load SAE.**\n\nCheck paths.\n\nError: `{exc}`"
         )
         return
 
+    n_features: int = (
+        ckpt_meta["cfg"]["n_features"]
+        if ckpt_meta and "cfg" in ckpt_meta
+        else 8192
+    )
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # 3-column layout: LEFT (navigation) | MAIN (content) | RIGHT (feature map)
+    # ══════════════════════════════════════════════════════════════════════════
+    col_left, col_main, col_right = st.columns([2, 5, 3], gap="medium")
+
+    # ── LEFT PANEL: Feature navigation ───────────────────────────────────────
+    with col_left:
+        st.markdown(
+            '<p class="sae-section">🔎 FEATURE NAVIGATION</p>',
+            unsafe_allow_html=True,
+        )
+
+        feat_search = st.text_input(
+            "Search feature index",
+            placeholder=f"0 – {n_features - 1}",
+            key="_fd_search",
+            label_visibility="collapsed",
+        )
+        if feat_search.strip().isdigit():
+            _searched = int(feat_search.strip())
+            if 0 <= _searched < n_features:
+                st.session_state[_K_FEAT]    = _searched
+                st.session_state[_K_FEAT_SL] = _searched
+
+        feat_input = st.number_input(
+            "Feature Index",
+            min_value=0,
+            max_value=n_features - 1,
+            value=int(st.session_state.get(_K_FEAT, 0)),
+            step=1,
+            key=_K_FEAT,
+        )
+        feat_slider = st.slider(
+            "Browse",
+            min_value=0,
+            max_value=n_features - 1,
+            value=int(feat_input),
+            key=_K_FEAT_SL,
+            label_visibility="collapsed",
+        )
+        feat_idx: int = (
+            feat_slider
+            if feat_slider != int(st.session_state.get(_K_FEAT, 0))
+            else int(feat_input)
+        )
+
+        st.markdown("---")
+        top_k = st.slider(
+            "Top N examples",
+            min_value=5, max_value=50, value=int(st.session_state.get(_K_TOPK, 20)),
+            step=5, key=_K_TOPK,
+        )
+        threshold = st.slider(
+            "Activation threshold",
+            min_value=0.0, max_value=5.0,
+            value=float(st.session_state.get(_K_THRESH, 0.0)),
+            step=0.05, key=_K_THRESH,
+            help="Only show tokens with activation > threshold",
+        )
+        context_tokens = st.slider(
+            "Context window (tokens)",
+            min_value=2, max_value=20,
+            value=int(st.session_state.get(_K_CTX, 8)),
+            step=2, key=_K_CTX,
+        )
+
+        st.markdown("---")
+        # Export feature report
+        _report = {
+            "feature_idx":    feat_idx,
+            "layer":          layer,
+            "ckpt_path":      ckpt_path,
+            "dataset_root":   dataset_root,
+            "n_features":     n_features,
+            "top_k":          top_k,
+            "threshold":      threshold,
+            "context_tokens": context_tokens,
+        }
+        st.download_button(
+            "⬇ Feature report (JSON)",
+            data=json.dumps(_report, indent=2),
+            file_name=f"feature_{feat_idx}_report.json",
+            mime="application/json",
+            use_container_width=True,
+            help="Downloads feature metadata as JSON; augmented with stats below.",
+        )
+
     # ── Compute feature data ───────────────────────────────────────────────────
-    with st.spinner(f"Computing feature {feat_idx} / {n_features - 1} …"):
+    with st.spinner(f"Computing feature {feat_idx} …"):
         hist_d   = _compute_histogram(ckpt_path, dataset_root, layer, feat_idx)
         snippets = _compute_top_k(
             ckpt_path, dataset_root, layer, feat_idx,
             top_k, threshold, context_tokens,
         )
 
-    # ── Feature header metrics ─────────────────────────────────────────────────
-    st.markdown(
-        f"### Feature `{feat_idx}` "
-        f"<span style='color:#6e7681;font-size:0.85rem;font-weight:400'>"
-        f"/ {n_features} features · layer {layer}</span>",
-        unsafe_allow_html=True,
-    )
+    # ── MAIN PANEL: Distribution + Examples ──────────────────────────────────
+    with col_main:
+        # Header metrics row
+        st.markdown(
+            f"### Feature `{feat_idx}` "
+            f"<span style='color:#6e7681;font-size:0.85rem;font-weight:400'>"
+            f"/ {n_features} · layer {layer}</span>",
+            unsafe_allow_html=True,
+        )
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Feature", feat_idx)
-
-    if hist_d:
-        c2.metric("Max Activation",  f"{hist_d['max_act']:.4f}")
-        c3.metric("% Active",        f"{hist_d['pct_active']:.2f}%")
-        c4.metric("Mean (active)",   f"{hist_d['mean_active']:.4f}")
-        c5.metric("Mean (all)",      f"{hist_d['mean_all']:.5f}")
-        if hist_d["is_dead"]:
-            st.markdown(
-                '<div class="dead-feature-box">'
-                "⚠️ <b>Dead feature</b> — this feature never activated on the "
-                "scanned tokens.  Consider resampling or increasing λ."
-                "</div>",
-                unsafe_allow_html=True,
-            )
-    else:
-        c2.metric("Max Activation",  "—")
-        c3.metric("% Active",        "—")
-        c4.metric("Mean (active)",   "—")
-        c5.metric("Mean (all)",      "—")
-
-    st.markdown("---")
-
-    # ── Row 1: Histogram + Logit effects ──────────────────────────────────────
-    if use_logit:
-        col_hist, col_logit = st.columns([3, 2])
-    else:
-        col_hist = st.container()
-
-    with col_hist:
-        st.subheader("Activation Distribution")
-        if hist_d and not hist_d["is_dead"]:
-            fig_hist = _build_histogram_fig(hist_d, feat_idx)
-            st.plotly_chart(fig_hist, use_container_width=True)
-        elif hist_d and hist_d["is_dead"]:
-            st.info("This feature never activated — no distribution to show.")
+        mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+        mc1.metric("Index", feat_idx)
+        if hist_d:
+            mc2.metric("Max Act",     f"{hist_d['max_act']:.4f}")
+            mc3.metric("% Active",    f"{hist_d['pct_active']:.2f}%")
+            mc4.metric("Mean (act)",  f"{hist_d['mean_active']:.4f}")
+            mc5.metric("Mean (all)",  f"{hist_d['mean_all']:.5f}")
+            if hist_d["is_dead"]:
+                st.markdown(
+                    '<div class="dead-feature-box">'
+                    "⚠️ <b>Dead feature</b> — never activated on scanned tokens. "
+                    "Consider resampling or increasing λ.</div>",
+                    unsafe_allow_html=True,
+                )
         else:
-            st.warning("Histogram data unavailable.")
+            for m in [mc2, mc3, mc4, mc5]:
+                m.metric("—", "—")
 
-    if use_logit:
-        with col_logit:
-            st.subheader("Logit Effects")
-            with st.spinner("Computing logit effects …"):
-                effects = _compute_logit_effects(
-                    ckpt_path, dataset_root, layer, feat_idx,
-                    model_name, top_k=10,
-                )
+        st.markdown("---")
 
-            if effects:
-                fig_logit = _build_logit_fig(effects)
-                st.plotly_chart(fig_logit, use_container_width=True)
-                st.caption(
-                    f"W_dec[{feat_idx}] @ W_U  ·  model: `{model_name}`  ·  "
-                    "Green = promoted, Red = suppressed"
+        # ── Top row: Activation histogram (+ optional logit effects) ──────────
+        if use_logit:
+            ch, cl = st.columns([3, 2])
+        else:
+            ch = st.container()
+
+        with ch:
+            st.subheader("Activation Distribution")
+            if hist_d and not hist_d["is_dead"]:
+                st.plotly_chart(
+                    _build_histogram_fig(hist_d, feat_idx),
+                    use_container_width=True,
                 )
+            elif hist_d and hist_d["is_dead"]:
+                st.info("Feature never activated — no distribution to show.")
             else:
-                st.warning(
-                    f"Could not compute logit effects.  "
-                    f"Make sure `{model_name}` is a valid TransformerLens model "
-                    "and the model's d_model matches the SAE."
+                st.warning("Histogram data unavailable.")
+
+        if use_logit:
+            with cl:
+                st.subheader("Logit Effects")
+                with st.spinner("Computing …"):
+                    effects = _compute_logit_effects(
+                        ckpt_path, dataset_root, layer, feat_idx, model_name, top_k=10
+                    )
+                if effects:
+                    st.plotly_chart(_build_logit_fig(effects), use_container_width=True)
+                    st.caption(
+                        f"W_dec[{feat_idx}] @ W_U · `{model_name}` · "
+                        "🟩 promoted  🟥 suppressed"
+                    )
+                else:
+                    st.warning(f"Could not compute logit effects for `{model_name}`.")
+        else:
+            st.caption(
+                "💡 Enable **Logit Lens** in the sidebar to see promoted/suppressed tokens."
+            )
+
+        st.markdown("---")
+
+        # ── Bottom row: Top-N Activating Examples ─────────────────────────────
+        n_found = len(snippets)
+        threshold_label = f" above {threshold:.2f}" if threshold > 0 else ""
+        st.subheader(f"Top {top_k} Activating Examples{threshold_label}")
+
+        if n_found == 0:
+            st.info(
+                f"No tokens with activation > {threshold:.2f}. "
+                "Lower the **Activation threshold** in the left panel."
+            )
+        else:
+            if n_found < top_k:
+                st.caption(f"Showing {n_found} (fewer than {top_k} exceeded threshold).")
+            st.markdown(_render_examples_html(snippets), unsafe_allow_html=True)
+
+            with st.expander("Raw snippet data / CSV export"):
+                import pandas as _pd
+                _df = _pd.DataFrame([
+                    {
+                        "rank":     s.get("rank"),
+                        "score":    s.get("score"),
+                        "token":    s.get("token_str"),
+                        "sent_idx": s.get("sentence_idx"),
+                        "tok_pos":  s.get("token_pos"),
+                        "label":    s.get("label"),
+                        "sentence": (s.get("sentence_text") or "")[:120],
+                    }
+                    for s in snippets
+                ])
+                st.dataframe(_df, use_container_width=True, height=260)
+                st.download_button(
+                    "⬇ Download snippets CSV",
+                    data=_df.to_csv(index=False).encode(),
+                    file_name=f"feature_{feat_idx}_snippets.csv",
+                    mime="text/csv",
+                    use_container_width=False,
                 )
 
-    if not use_logit:
+    # ── RIGHT PANEL: Global Feature UMAP ─────────────────────────────────────
+    with col_right:
+        st.markdown(
+            '<p class="sae-section">🌐 FEATURE MAP</p>',
+            unsafe_allow_html=True,
+        )
         st.caption(
-            "💡 Enable **Logit Lens** in the sidebar to see which output tokens "
-            "this feature promotes or suppresses via W_dec @ W_U."
+            "Each point = one SAE feature direction projected via UMAP. "
+            "Click to jump to that feature."
+        )
+        _render_feature_umap_panel(
+            ckpt_path=ckpt_path,
+            dataset_root=dataset_root,
+            layer=layer,
+            current_feat=feat_idx,
+            n_features=n_features,
         )
 
-    st.markdown("---")
 
-    # ── Row 2: Top-N Examples ─────────────────────────────────────────────────
-    n_found = len(snippets)
-    label_str = (
-        f" above threshold {threshold:.2f}" if threshold > 0 else ""
+# ---------------------------------------------------------------------------
+# Feature UMAP right-panel helper
+# ---------------------------------------------------------------------------
+
+def _render_feature_umap_panel(
+    ckpt_path: str,
+    dataset_root: str,
+    layer: int,
+    current_feat: int,
+    n_features: int,
+) -> None:
+    """Render a compact Feature UMAP scatter in the right panel."""
+    try:
+        from spore.app.feature_umap import compute_feature_map, FeatureMapData
+        from spore.app.sae_feature import FeatureAnalyzer
+    except ImportError:
+        st.caption("Feature map unavailable (missing dependency).")
+        return
+
+    @st.cache_data(show_spinner="Computing feature map …", ttl=None)
+    def _get_fmap(ckpt: str, ds: str, lyr: int) -> dict | None:
+        try:
+            analyzer = FeatureAnalyzer.from_checkpoint(ckpt, ds, lyr)
+            data = compute_feature_map(
+                analyzer, n_pca=50, umap_neighbors=15,
+                umap_min_dist=0.1, n_clusters=20, max_tokens=50_000,
+            )
+            import numpy as np
+            return {
+                "xy":      data.umap_xy.tolist(),
+                "max_act": data.max_act.tolist(),
+                "labels":  data.cluster_labels.tolist(),
+                "n":       data.n_features,
+                "used_umap": data.used_umap,
+            }
+        except Exception:
+            return None
+
+    raw = _get_fmap(ckpt_path, dataset_root, layer)
+    if raw is None:
+        st.caption(
+            "Feature map unavailable. Make sure the SAE checkpoint and dataset "
+            "are valid, then click **🔄 Refresh** in the sidebar."
+        )
+        return
+
+    import numpy as np
+    import plotly.graph_objects as go
+
+    xy      = np.array(raw["xy"],      dtype=np.float32)
+    max_act = np.array(raw["max_act"], dtype=np.float32)
+    n       = raw["n"]
+
+    # Build compact scatter
+    fig = go.Figure()
+    fig.add_trace(go.Scattergl(
+        x=xy[:, 0], y=xy[:, 1],
+        mode="markers",
+        marker=dict(
+            size=3,
+            color=max_act,
+            colorscale="Viridis",
+            opacity=0.7,
+            line=dict(width=0),
+            showscale=False,
+        ),
+        customdata=list(range(n)),
+        hovertemplate="Feature %{customdata}<extra></extra>",
+        showlegend=False,
+    ))
+    # Highlight current feature
+    if 0 <= current_feat < n:
+        fig.add_trace(go.Scatter(
+            x=[float(xy[current_feat, 0])],
+            y=[float(xy[current_feat, 1])],
+            mode="markers",
+            marker=dict(size=10, color="rgba(0,0,0,0)",
+                        line=dict(color="#f0f6fc", width=2)),
+            customdata=[current_feat],
+            hovertemplate=f"<b>Feature {current_feat}</b><extra></extra>",
+            showlegend=False,
+        ))
+
+    method_str = "UMAP" if raw.get("used_umap") else "PCA 2D"
+    fig.update_layout(
+        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        paper_bgcolor="#0d1117", plot_bgcolor="#0d1117",
+        margin=dict(l=4, r=4, t=24, b=4),
+        height=380,
+        title=dict(
+            text=f"{method_str} · {n:,} features",
+            font=dict(size=10, color="#8b949e"), x=0,
+        ),
+        dragmode="pan",
+        hoverlabel=dict(bgcolor="#161b22", bordercolor="#30363d",
+                        font=dict(color="#cdd9e5", size=10)),
+        uirevision="fd_fmap",
     )
-    st.subheader(f"Top {top_k} Activating Examples{label_str}")
 
-    if n_found == 0:
-        st.info(
-            f"No tokens found with activation > {threshold:.2f}.  "
-            "Try lowering the **Activation Threshold** in the sidebar."
-        )
-    else:
-        if n_found < top_k:
-            st.caption(f"Showing {n_found} examples (fewer than {top_k} exceeded threshold).")
+    event = st.plotly_chart(
+        fig, use_container_width=True,
+        on_select="rerun",
+        key="fd_feature_umap",
+        config={"scrollZoom": True, "displayModeBar": False},
+    )
+    # Click → update feature index in left panel
+    if event and hasattr(event, "selection") and event.selection.points:
+        pt = event.selection.points[0]
+        cdata = pt.get("customdata")
+        if cdata is not None:
+            clicked = int(cdata) if not isinstance(cdata, (list, tuple)) else int(cdata[0])
+            if 0 <= clicked < n_features:
+                st.session_state[_K_FEAT]    = clicked
+                st.session_state[_K_FEAT_SL] = clicked
+                st.rerun()
 
-        table_html = _render_examples_html(snippets)
-        st.markdown(table_html, unsafe_allow_html=True)
-
-        # Expandable raw data
-        with st.expander("Raw snippet data"):
-            import pandas as pd
-            df = pd.DataFrame([
-                {
-                    "rank":       s.get("rank"),
-                    "score":      s.get("score"),
-                    "token":      s.get("token_str"),
-                    "sent_idx":   s.get("sentence_idx"),
-                    "tok_pos":    s.get("token_pos"),
-                    "label":      s.get("label"),
-                    "sentence":   (s.get("sentence_text") or "")[:120],
-                }
-                for s in snippets
-            ])
-            st.dataframe(df, use_container_width=True, height=280)
+    st.caption(
+        f"Highlighted: feature **{current_feat}** &nbsp;|&nbsp; "
+        "Click any point to navigate."
+    )
