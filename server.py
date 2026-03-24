@@ -19,7 +19,7 @@ from typing import Optional
 try:
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, JSONResponse
     from fastapi.staticfiles import StaticFiles
     from pydantic import BaseModel
     import uvicorn
@@ -394,6 +394,46 @@ async def nlf_mastery():
     """Return full mastery report across all loaded stages."""
     fw = _get_nlf()
     return fw.mastery_report()
+
+
+@app.get("/api/nlf/stage-files")
+async def nlf_stage_files():
+    """List raw stage JSON files stored on disk for external training tooling."""
+    _NLF_STAGES_DIR.mkdir(parents=True, exist_ok=True)
+    files = []
+    for path in sorted(_NLF_STAGES_DIR.glob("*.json")):
+        files.append(
+            {
+                "name": path.name,
+                "size_bytes": path.stat().st_size,
+                "url": f"/api/nlf/stage-files/{path.name}",
+            }
+        )
+    return {"files": files, "directory": str(_NLF_STAGES_DIR)}
+
+
+@app.get("/api/nlf/stage-files/{file_name}")
+async def nlf_stage_file(file_name: str):
+    """Return a raw stage JSON file so it is accessible from the unified UI."""
+    from fastapi import HTTPException
+
+    _NLF_STAGES_DIR.mkdir(parents=True, exist_ok=True)
+    if "/" in file_name or "\\" in file_name:
+        raise HTTPException(status_code=400, detail="Invalid file name.")
+    if not file_name.endswith(".json"):
+        raise HTTPException(status_code=400, detail="Only JSON files are supported.")
+
+    file_path = (_NLF_STAGES_DIR / file_name).resolve()
+    if file_path.parent != _NLF_STAGES_DIR.resolve():
+        raise HTTPException(status_code=400, detail="Invalid file path.")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Stage file not found.")
+
+    try:
+        payload = json.loads(file_path.read_text())
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not read JSON: {exc}")
+    return JSONResponse(content=payload)
 
 
 # ---------------------------------------------------------------------------
